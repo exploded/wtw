@@ -53,6 +53,9 @@ DELETE FROM sessions WHERE expires_at <= datetime('now');
 -- name: GetVerdict :one
 SELECT * FROM verdicts WHERE user_id = ? AND created_at > datetime('now', '-1 day');
 
+-- name: DeleteVerdict :exec
+DELETE FROM verdicts WHERE user_id = ?;
+
 -- name: UpsertVerdict :exec
 INSERT INTO verdicts (user_id, verdict, headline, show_id)
 VALUES (?, ?, ?, ?)

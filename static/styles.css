@@ -619,6 +619,7 @@ em { font-style: italic; }
   padding: 48px 32px 120px;
 }
 .recs__hero { margin-bottom: 72px; }
+.recs__hero-head { display: flex; align-items: center; justify-content: space-between; }
 
 .cinephile {
   font-family: var(--serif);

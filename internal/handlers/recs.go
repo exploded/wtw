@@ -71,6 +71,13 @@ func (h *Handler) Recs(w http.ResponseWriter, r *http.Request) {
 	renderPage(w, "recs.html", data)
 }
 
+func (h *Handler) RecsNewVerdict(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	_ = h.queries.DeleteVerdict(r.Context(), userID)
+	w.Header().Set("HX-Redirect", "/recs")
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *Handler) RecsRefresh(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)

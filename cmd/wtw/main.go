@@ -176,6 +176,7 @@ func main() {
 	mux.HandleFunc("GET /catalog/filter", middleware.RequireAuth(store, h.CatalogFilter))
 	mux.HandleFunc("GET /recs", middleware.RequireAuth(store, h.Recs))
 	mux.HandleFunc("GET /recs/refresh", middleware.RequireAuth(store, h.RecsRefresh))
+	mux.HandleFunc("POST /recs/new-verdict", middleware.RequireAuth(store, h.RecsNewVerdict))
 	mux.HandleFunc("GET /profile", middleware.RequireAuth(store, h.Profile))
 	mux.HandleFunc("POST /ratings/{show_id}", middleware.RequireAuth(store, h.SetRating))
 	mux.HandleFunc("DELETE /ratings/{show_id}", middleware.RequireAuth(store, h.DeleteRating))

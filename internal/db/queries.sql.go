@@ -141,6 +141,15 @@ func (q *Queries) DeleteSession(ctx context.Context, token string) error {
 	return err
 }
 
+const deleteVerdict = `-- name: DeleteVerdict :exec
+DELETE FROM verdicts WHERE user_id = ?
+`
+
+func (q *Queries) DeleteVerdict(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteVerdict, userID)
+	return err
+}
+
 const getActivePartnershipsAsOwner = `-- name: GetActivePartnershipsAsOwner :many
 SELECT p.id, p.user_id, p.partner_id, p.partner_email, p.status, p.created_at,
        u.name AS partner_name, u.avatar_url AS partner_avatar
