@@ -569,10 +569,8 @@ em { font-style: italic; }
   opacity: 1;
   transform: translateY(0);
 }
-/* Touch devices have no hover — always show the rating bar.
-   Drop backdrop-filter (broken in iOS Safari inside overflow:hidden + border-radius)
-   and use a solid background instead. */
-@media (hover: none) {
+/* Mobile: always show rating bar (no hover on phones) */
+@media (max-width: 720px) {
   .poster-card__rate {
     opacity: 1;
     transform: translateY(0);
