@@ -71,7 +71,7 @@ TMDB_API_KEY=
 
 # Production
 PROD=True
-PORT=8080
+PORT=8991
 
 # Monitor portal (optional)
 MONITOR_URL=
@@ -145,7 +145,7 @@ echo ""
 echo "Add to your Caddyfile:"
 echo ""
 echo "  wtw.mchugh.ai {"
-echo "      reverse_proxy localhost:8080"
+echo "      reverse_proxy localhost:8991"
 echo "  }"
 echo ""
 echo "Then reload: sudo systemctl reload caddy"
