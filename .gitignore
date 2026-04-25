@@ -1,0 +1,17 @@
+.env
+*.local.*
+/wtw
+wtw.exe
+*.db
+*.db-wal
+*.db-shm
+.vscode/
+.idea/
+*.swp
+*.swo
+*.backup
+*.bak
+*~
+.DS_Store
+Thumbs.db
+dist/

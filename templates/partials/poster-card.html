@@ -1,0 +1,39 @@
+{{define "poster-card"}}
+<div class="poster-card{{if .Rating}} is-rated{{end}}"{{if .Rating}} data-rating="{{.Rating}}"{{end}}>
+  <div class="poster-card__poster">
+    <img alt="{{.Show.Title}}" loading="lazy" src="https://image.tmdb.org/t/p/w500{{.Show.PosterPath.String}}">
+    <div class="poster-card__poster-fb"><span>{{.Show.Title}}</span></div>
+    <div class="poster-card__badge">{{if eq .Rating "liked"}}&#x2713;{{else if eq .Rating "disliked"}}&#x00d7;{{else if eq .Rating "unseen"}}&#x2014;{{end}}</div>
+    <div class="poster-card__rate" role="group">
+      <button class="rate-btn rate-btn--liked{{if eq .Rating "liked"}} is-active{{end}}"
+              hx-post="/ratings/{{.Show.ID}}"
+              hx-vals='{"rating":"liked"}'
+              hx-target="closest .poster-card"
+              hx-swap="outerHTML"
+              title="Liked">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+      </button>
+      <button class="rate-btn rate-btn--disliked{{if eq .Rating "disliked"}} is-active{{end}}"
+              hx-post="/ratings/{{.Show.ID}}"
+              hx-vals='{"rating":"disliked"}'
+              hx-target="closest .poster-card"
+              hx-swap="outerHTML"
+              title="Disliked">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+      </button>
+      <button class="rate-btn rate-btn--unseen{{if eq .Rating "unseen"}} is-active{{end}}"
+              hx-post="/ratings/{{.Show.ID}}"
+              hx-vals='{"rating":"unseen"}'
+              hx-target="closest .poster-card"
+              hx-swap="outerHTML"
+              title="Haven't seen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="poster-card__meta">
+    <span class="poster-card__title">{{.Show.Title}}</span>
+    <span class="poster-card__year">{{.Show.Year}} &middot; {{.Show.Genre.String}}</span>
+  </div>
+</div>
+{{end}}

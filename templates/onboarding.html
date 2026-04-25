@@ -1,0 +1,50 @@
+{{define "title"}}Onboarding - What to Watch{{end}}
+{{define "onboarding-content"}}
+<header class="appbar">
+  <div class="brand brand--small">
+    <span class="brand__mark">W<span class="brand__mark-sub">tw</span></span>
+  </div>
+  <div class="appbar__center">
+    <div class="progress">
+      <div class="progress__bar" style="width: {{if .Shows}}{{len .Shows}}{{else}}0{{end}}%"></div>
+    </div>
+    <span class="progress__label">{{.RatedCount}} of {{len .Shows}} rated &middot; 3 to unlock recs</span>
+  </div>
+  <a href="/catalog" class="btn btn--ghost">Skip for now</a>
+</header>
+
+<main class="onboard">
+  <div class="onboard__intro">
+    <p class="eyebrow">Onboarding &middot; Step 1 of 1</p>
+    <h2 class="h-display">Rate a few you know.</h2>
+    <p class="lede lede--tight">
+      We've pulled fifty of the most-discussed series. Tap a poster to mark
+      it &mdash; or hit <em>Haven't seen</em> if it's not for you. Three is
+      all we need to start.
+    </p>
+    <div class="legend">
+      <span class="legend__chip legend__chip--liked"><span class="dot"></span>Liked</span>
+      <span class="legend__chip legend__chip--disliked"><span class="dot"></span>Disliked</span>
+      <span class="legend__chip legend__chip--unseen"><span class="dot"></span>Haven't seen</span>
+    </div>
+  </div>
+
+  <div class="poster-grid" id="onboardGrid">
+    {{range .Shows}}
+    {{template "poster-card" .}}
+    {{end}}
+  </div>
+
+  <div class="onboard__cta">
+    <a href="/recs" class="btn btn--primary btn--lg">
+      Get my recommendations
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </a>
+    <a href="/catalog" class="btn btn--ghost">Browse the full catalog instead</a>
+  </div>
+</main>
+{{end}}
+
+{{define "content"}}
+{{template "onboarding-content" .}}
+{{end}}

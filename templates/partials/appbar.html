@@ -1,0 +1,14 @@
+{{define "appbar"}}
+<header class="appbar">
+  <a href="/recs" class="brand brand--small">
+    <span class="brand__mark">W<span class="brand__mark-sub">tw</span></span>
+    <span class="brand__name">What&nbsp;to&nbsp;Watch</span>
+  </a>
+  <nav class="tabs">
+    <a class="tab{{if eq .ActiveTab "recs"}} tab--active{{end}}" href="/recs" hx-get="/recs" hx-target="#app" hx-push-url="true">For you</a>
+    <a class="tab{{if eq .ActiveTab "catalog"}} tab--active{{end}}" href="/catalog" hx-get="/catalog" hx-target="#app" hx-push-url="true">Catalog</a>
+    <a class="tab{{if eq .ActiveTab "profile"}} tab--active{{end}}" href="/profile" hx-get="/profile" hx-target="#app" hx-push-url="true">Taste</a>
+  </nav>
+  <button class="avatar" hx-get="/profile" hx-target="#app" hx-push-url="/profile" title="Profile">{{.UserInitials}}</button>
+</header>
+{{end}}

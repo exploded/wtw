@@ -1,0 +1,67 @@
+#!/bin/bash
+# deploy-wtw - Server-side deploy script for What to Watch
+# Called by GitHub Actions: sudo /usr/local/bin/deploy-wtw /tmp/wtw-deploy
+set -e
+
+BUNDLE="${1:?Usage: deploy-wtw <bundle-dir>}"
+APP_DIR="/var/www/wtw"
+SERVICE="wtw"
+
+# Detect service user from systemd unit
+SVC_USER=$(systemctl show -p User "$SERVICE" --value 2>/dev/null || echo "www-data")
+[ -z "$SVC_USER" ] && SVC_USER="www-data"
+
+echo "=== deploy-wtw ==="
+
+# Self-update: if the bundle ships a newer copy of this script, install it
+# and re-exec so the rest of the deploy uses the new logic.
+SELF="/usr/local/bin/deploy-wtw"
+BUNDLED="$BUNDLE/scripts/deploy-wtw"
+if [ -f "$BUNDLED" ] && ! cmp -s "$SELF" "$BUNDLED"; then
+    echo "[self-update] installing newer deploy-wtw"
+    install -m 755 "$BUNDLED" "$SELF"
+    exec "$SELF" "$BUNDLE"
+fi
+
+# 1. Stop service
+echo "[1/5] stopping $SERVICE"
+systemctl stop "$SERVICE" 2>/dev/null || true
+
+# 2. Install binary
+echo "[2/5] installing binary"
+rm -f "$APP_DIR/wtw"
+cp "$BUNDLE/wtw" "$APP_DIR/wtw"
+chmod 755 "$APP_DIR/wtw"
+
+# 3. Copy web assets
+echo "[3/5] copying assets"
+rm -rf "$APP_DIR/templates" "$APP_DIR/static"
+cp -r "$BUNDLE/templates" "$APP_DIR/"
+cp -r "$BUNDLE/static" "$APP_DIR/"
+[ -f "$BUNDLE/favicon.ico" ] && cp "$BUNDLE/favicon.ico" "$APP_DIR/"
+
+# 4. Fix ownership
+echo "[4/5] fixing ownership"
+chown -R "$SVC_USER" "$APP_DIR"
+
+# 5. Start and verify
+echo "[5/5] starting $SERVICE"
+systemctl start "$SERVICE"
+
+for i in 1 2 3 4 5; do
+    if systemctl is-active --quiet "$SERVICE"; then
+        echo "[ok] $SERVICE is running"
+        break
+    fi
+    sleep 1
+done
+
+if ! systemctl is-active --quiet "$SERVICE"; then
+    echo "[error] $SERVICE failed to start"
+    journalctl -u "$SERVICE" --no-pager -n 20
+    exit 1
+fi
+
+# Cleanup
+rm -rf "$BUNDLE"
+echo "=== deploy complete ==="

@@ -1,0 +1,64 @@
+{{define "title"}}Your Taste - What to Watch{{end}}
+{{define "profile-content"}}
+{{template "appbar" .}}
+
+<main class="profile">
+
+  <section class="profile__head">
+    <div class="profile__id">
+      <div class="profile__avatar">{{.UserInitials}}</div>
+      <div>
+        <h2 class="h-display h-display--sm">{{.UserName}}</h2>
+        <p class="lede lede--tight">{{.UserEmail}}</p>
+      </div>
+    </div>
+    <button class="btn btn--ghost" hx-post="/auth/logout">Sign out</button>
+  </section>
+
+  {{if .TopShows}}
+  <div class="profile__cols">
+    <section class="taste-card taste-card--wide">
+      <h4 class="taste-card__title">Your top rated</h4>
+      <div class="top-row">
+        {{range .TopShows}}
+        <div class="poster-card">
+          <div class="poster-card__poster">
+            <img alt="{{.Title}}" loading="lazy" src="https://image.tmdb.org/t/p/w500{{.PosterPath.String}}">
+            <div class="poster-card__poster-fb"><span>{{.Title}}</span></div>
+          </div>
+          <div class="poster-card__meta">
+            <span class="poster-card__title">{{.Title}}</span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="taste-card taste-card--stats">
+      <div class="stat-grid">
+        <div><span class="stat__num">{{.Total}}</span><span class="stat__lbl">series rated</span></div>
+        <div><span class="stat__num">{{.Liked}}</span><span class="stat__lbl">loved</span></div>
+        <div><span class="stat__num">{{.Disliked}}</span><span class="stat__lbl">disliked</span></div>
+        <div><span class="stat__num">{{.ShowCount}}</span><span class="stat__lbl">in catalog</span></div>
+      </div>
+    </section>
+  </div>
+  {{end}}
+
+  <section class="profile__settings">
+    <h4 class="h-section">Account</h4>
+    <div class="settings-row">
+      <div>
+        <strong>Reset my taste</strong>
+        <p>Clear all ratings and start over. Cannot be undone.</p>
+      </div>
+      <button class="btn btn--ghost btn--danger">Reset</button>
+    </div>
+  </section>
+
+</main>
+{{end}}
+
+{{define "content"}}
+{{template "profile-content" .}}
+{{end}}

@@ -1,0 +1,113 @@
+{{define "title"}}Recommendations - What to Watch{{end}}
+{{define "recs-content"}}
+{{template "appbar" .}}
+
+<main class="recs">
+{{if not .HasEnoughData}}
+  <div style="text-align:center; padding: 120px 32px;">
+    <p class="eyebrow">Not enough data yet</p>
+    <h2 class="h-display">Rate at least 3 shows to unlock recommendations.</h2>
+    <p class="lede" style="margin: 0 auto 36px;">You've rated {{.RatedCount}} so far. Head to onboarding to rate a few more.</p>
+    <a href="/onboarding" class="btn btn--primary btn--lg">Rate some shows</a>
+  </div>
+{{else}}
+
+  {{if .Verdict}}
+  <section class="recs__hero">
+    <p class="eyebrow eyebrow--accent">Tonight's verdict</p>
+    <h2 class="h-display">{{.Verdict.Headline}}</h2>
+    <p class="cinephile">
+      <span class="cinephile__avatar" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="32" height="32"><circle cx="16" cy="16" r="16" fill="#3a2a1c"/><path d="M10 13c0-2 2-4 6-4s6 2 6 4-2 3-6 3-6-1-6-3zm0 7c0 4 3 6 6 6s6-2 6-6c0-1-2-2-6-2s-6 1-6 2z" fill="#e7a857"/></svg>
+      </span>
+      <span>
+        &ldquo;{{.Verdict.Body}} <span class="cinephile__sig">&mdash; your cinephile</span>&rdquo;
+      </span>
+    </p>
+
+    {{if .Verdict.Show}}
+    <div class="rec-feature">
+      <div class="rec-feature__poster">
+        <img alt="{{.Verdict.Show.Title}}" loading="lazy"
+             src="https://image.tmdb.org/t/p/w500{{.Verdict.Show.PosterPath.String}}"
+>
+        <div class="rec-feature__poster-fb"><span>{{.Verdict.Show.Title}}</span></div>
+      </div>
+      <div class="rec-feature__body">
+        <div class="meta">
+          <span class="meta__year">{{.Verdict.Show.Year}}</span>
+          <span class="meta__dot">&bull;</span>
+          <span class="meta__genre">{{.Verdict.Show.Genre.String}}</span>
+        </div>
+        {{if .Verdict.Show.Synopsis.Valid}}
+        <p class="rec-feature__synopsis">{{.Verdict.Show.Synopsis.String}}</p>
+        {{end}}
+        <div class="rec-feature__actions">
+          <button class="btn btn--primary"
+                  hx-post="/ratings/{{.Verdict.Show.ID}}"
+                  hx-vals='{"rating":"liked"}'
+                  hx-target="closest .rec-feature"
+                  hx-swap="outerHTML">Add to liked</button>
+          <button class="btn btn--ghost"
+                  hx-post="/ratings/{{.Verdict.Show.ID}}"
+                  hx-vals='{"rating":"disliked"}'
+                  hx-target="closest .rec-feature"
+                  hx-swap="outerHTML">Not for me</button>
+        </div>
+      </div>
+    </div>
+    {{end}}
+  </section>
+  {{end}}
+
+  {{if .RecsTonight}}
+  <section class="recs__row">
+    <div class="row__head">
+      <h3 class="row__title">More for tonight</h3>
+      <button class="btn btn--ghost btn--sm" hx-get="/recs/refresh" hx-target="#recsRow" hx-swap="innerHTML">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div class="poster-row" id="recsRow">
+      {{range .RecsTonight}}
+      {{template "poster-card" .}}
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .BecauseShows}}
+  <section class="recs__row">
+    <div class="row__head">
+      <h3 class="row__title">Because you liked <em>{{.BecauseTitle}}</em></h3>
+    </div>
+    <div class="poster-row">
+      {{range .BecauseShows}}
+      {{template "poster-card" .}}
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .ComfortShows}}
+  <section class="recs__row">
+    <div class="row__head">
+      <h3 class="row__title">Comfort rewatches we think you'll love</h3>
+      <span class="row__sub">Because everyone needs one</span>
+    </div>
+    <div class="poster-row">
+      {{range .ComfortShows}}
+      {{template "poster-card" .}}
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
+{{end}}
+</main>
+{{end}}
+
+{{define "content"}}
+{{template "recs-content" .}}
+{{end}}
