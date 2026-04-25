@@ -1,6 +1,6 @@
 # What to Watch — Claude Code Handoff
 
-A clean static UI is in `app.html`, `styles.css`, `data.js`, `app.js`. The HTML uses an htmx-friendly architecture: every screen is a `<section data-screen="<name>">` and every nav element is `data-go="<screen>"`. Below is everything you need to wire it up as a Go / htmx / SQLite / sqlc app hosted at `wtw.mchugh.ai`.
+A clean static UI is in `app.html`, `styles.css`, `data.js`, `app.js`. The HTML uses an htmx-friendly architecture: every screen is a `<section data-screen="<name>">` and every nav element is `data-go="<screen>"`. Below is everything you need to wire it up as a Go / htmx / SQLite / sqlc app hosted at `wtw.mchugh.au`.
 
 ---
 
@@ -217,7 +217,7 @@ Standard `golang.org/x/oauth2/google`. Required env vars:
 ```
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URL=https://wtw.mchugh.ai/auth/google/callback
+GOOGLE_REDIRECT_URL=https://wtw.mchugh.au/auth/google/callback
 SESSION_KEY=<32-byte hex>
 TMDB_API_KEY=...
 DATABASE_URL=file:wtw.db?_fk=1
@@ -250,9 +250,9 @@ What's left: nothing. Optionally a 5-line script that adds a loading shimmer cla
 ## Deploy
 
 - Build: `CGO_ENABLED=0 go build -o wtw ./cmd/wtw`
-- Run behind Caddy (auto-TLS for `wtw.mchugh.ai`):
+- Run behind Caddy (auto-TLS for `wtw.mchugh.au`):
   ```
-  wtw.mchugh.ai {
+  wtw.mchugh.au {
     reverse_proxy localhost:8080
   }
   ```

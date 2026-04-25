@@ -58,7 +58,7 @@ else
 # Google OAuth
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URL=https://wtw.mchugh.ai/auth/google/callback
+GOOGLE_REDIRECT_URL=https://wtw.mchugh.au/auth/google/callback
 
 # Session
 SESSION_KEY=
@@ -144,7 +144,7 @@ echo "=== Setup complete ==="
 echo ""
 echo "Add to your Caddyfile:"
 echo ""
-echo "  wtw.mchugh.ai {"
+echo "  wtw.mchugh.au {"
 echo "      reverse_proxy localhost:8991"
 echo "  }"
 echo ""
