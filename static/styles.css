@@ -569,6 +569,15 @@ em { font-style: italic; }
   opacity: 1;
   transform: translateY(0);
 }
+/* Touch devices have no hover — always show the rating bar */
+@media (hover: none) {
+  .poster-card__rate {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .rate-btn { height: 36px; }
+  .rate-btn svg { width: 16px; height: 16px; }
+}
 .rate-btn {
   height: 30px;
   border-radius: 999px;
