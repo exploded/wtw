@@ -569,17 +569,19 @@ em { font-style: italic; }
   opacity: 1;
   transform: translateY(0);
 }
-/* Mobile: always show rating bar (no hover on phones) */
+/* Mobile: always show rating bar (no hover on phones).
+   Use .poster-card ancestor for higher specificity so Safari
+   cannot let the base opacity:0 win the cascade. */
 @media (max-width: 720px) {
-  .poster-card__rate {
+  .poster-card .poster-card__rate {
     opacity: 1;
     transform: translateY(0);
     background: rgb(11, 9, 8);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  .rate-btn { height: 36px; }
-  .rate-btn svg { width: 16px; height: 16px; }
+  .poster-card .rate-btn { height: 36px; }
+  .poster-card .rate-btn svg { width: 16px; height: 16px; }
 }
 .rate-btn {
   height: 30px;
