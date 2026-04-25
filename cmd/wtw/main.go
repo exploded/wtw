@@ -180,6 +180,13 @@ func main() {
 	mux.HandleFunc("POST /ratings/{show_id}", middleware.RequireAuth(store, h.SetRating))
 	mux.HandleFunc("DELETE /ratings/{show_id}", middleware.RequireAuth(store, h.DeleteRating))
 
+	// Partner / Together
+	mux.HandleFunc("GET /together/{id}", middleware.RequireAuth(store, h.Together))
+	mux.HandleFunc("GET /together/{id}/refresh", middleware.RequireAuth(store, h.TogetherRefresh))
+	mux.HandleFunc("POST /partners/add", middleware.RequireAuth(store, h.AddPartner))
+	mux.HandleFunc("POST /partners/{id}/accept", middleware.RequireAuth(store, h.AcceptPartner))
+	mux.HandleFunc("POST /partners/{id}/remove", middleware.RequireAuth(store, h.RemovePartner))
+
 	// Static files
 	fileServer := http.FileServer(http.Dir("static"))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheStaticAssets(fileServer)))

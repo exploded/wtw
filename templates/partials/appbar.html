@@ -6,6 +6,7 @@
   </a>
   <nav class="tabs">
     <a class="tab{{if eq .ActiveTab "recs"}} tab--active{{end}}" href="/recs" hx-get="/recs" hx-target="#app" hx-push-url="true">For you</a>
+    {{if .Partners}}<a class="tab{{if eq .ActiveTab "together"}} tab--active{{end}}" href="/together/{{(index .Partners 0).PartnershipID}}" hx-get="/together/{{(index .Partners 0).PartnershipID}}" hx-target="#app" hx-push-url="true">Together</a>{{end}}
     <a class="tab{{if eq .ActiveTab "catalog"}} tab--active{{end}}" href="/catalog" hx-get="/catalog" hx-target="#app" hx-push-url="true">Catalog</a>
     <a class="tab{{if eq .ActiveTab "profile"}} tab--active{{end}}" href="/profile" hx-get="/profile" hx-target="#app" hx-push-url="true">Taste</a>
   </nav>

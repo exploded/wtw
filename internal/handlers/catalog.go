@@ -60,7 +60,7 @@ func (h *Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 	disliked := int64(counts.Disliked.Float64)
 
 	data := CatalogData{
-		PageData:  basePageData(r, "catalog"),
+		PageData:  h.basePageDataWithPartners(r, "catalog"),
 		Shows:     filtered,
 		Liked:     liked,
 		Disliked:  disliked,

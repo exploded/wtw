@@ -29,7 +29,7 @@ func (h *Handler) Recs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := RecsData{
-		PageData:   basePageData(r, "recs"),
+		PageData:   h.basePageDataWithPartners(r, "recs"),
 		RatedCount: len(ratings),
 	}
 

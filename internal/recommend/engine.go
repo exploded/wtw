@@ -328,6 +328,294 @@ func (e *Engine) fallbackVerdict(ctx context.Context, userID int64) (*Verdict, e
 	}, nil
 }
 
+// --- Together mode ---
+
+func (e *Engine) ScoreShowsTogether(ctx context.Context, userA, userB int64) ([]ScoredShow, error) {
+	ratingsA, err := e.queries.GetUserRatingsWithShows(ctx, userA)
+	if err != nil {
+		return nil, err
+	}
+	ratingsB, err := e.queries.GetUserRatingsWithShows(ctx, userB)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build preference vectors for both
+	prefA := make(map[string]float64)
+	for _, r := range ratingsA {
+		gv := genreVector(r.Genre.String)
+		weight := 0.0
+		if r.Rating == "liked" {
+			weight = 1.0
+		} else if r.Rating == "disliked" {
+			weight = -1.0
+		}
+		for tag, val := range gv {
+			prefA[tag] += val * weight
+		}
+	}
+	prefB := make(map[string]float64)
+	for _, r := range ratingsB {
+		gv := genreVector(r.Genre.String)
+		weight := 0.0
+		if r.Rating == "liked" {
+			weight = 1.0
+		} else if r.Rating == "disliked" {
+			weight = -1.0
+		}
+		for tag, val := range gv {
+			prefB[tag] += val * weight
+		}
+	}
+
+	// Merge: average both vectors
+	merged := make(map[string]float64)
+	allTags := make(map[string]bool)
+	for t := range prefA {
+		allTags[t] = true
+	}
+	for t := range prefB {
+		allTags[t] = true
+	}
+	for tag := range allTags {
+		merged[tag] = (prefA[tag] + prefB[tag]) / 2
+	}
+
+	// Build set of disliked shows by either user
+	disliked := make(map[string]bool)
+	ratedByA := make(map[string]bool)
+	ratedByB := make(map[string]bool)
+	for _, r := range ratingsA {
+		ratedByA[r.ShowID] = true
+		if r.Rating == "disliked" {
+			disliked[r.ShowID] = true
+		}
+	}
+	for _, r := range ratingsB {
+		ratedByB[r.ShowID] = true
+		if r.Rating == "disliked" {
+			disliked[r.ShowID] = true
+		}
+	}
+
+	// Score shows not disliked by either, not already watched by both
+	allShows, err := e.queries.GetShows(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var scored []ScoredShow
+	for _, show := range allShows {
+		if disliked[show.ID] {
+			continue
+		}
+		// Skip if both have already rated it (nothing new to watch)
+		if ratedByA[show.ID] && ratedByB[show.ID] {
+			continue
+		}
+
+		gv := genreVector(show.Genre.String)
+		score := 0.0
+		for tag, val := range gv {
+			score += val * merged[tag]
+		}
+		score += show.Popularity.Float64 / 1000
+		scored = append(scored, ScoredShow{Show: show, Score: score})
+	}
+
+	// Sort descending
+	for i := 0; i < len(scored); i++ {
+		for j := i + 1; j < len(scored); j++ {
+			if scored[j].Score > scored[i].Score {
+				scored[i], scored[j] = scored[j], scored[i]
+			}
+		}
+	}
+
+	return scored, nil
+}
+
+func (e *Engine) TopNTogether(ctx context.Context, userA, userB int64, n int) ([]db.Show, error) {
+	scored, err := e.ScoreShowsTogether(ctx, userA, userB)
+	if err != nil {
+		return nil, err
+	}
+	var result []db.Show
+	for i := 0; i < n && i < len(scored); i++ {
+		result = append(result, scored[i].Show)
+	}
+	return result, nil
+}
+
+func (e *Engine) BecauseYouBothLiked(ctx context.Context, userA, userB int64) (string, []db.Show, error) {
+	bothLiked, err := e.queries.GetBothLikedShows(ctx, db.GetBothLikedShowsParams{
+		UserID:   userA,
+		UserID_2: userB,
+	})
+	if err != nil || len(bothLiked) == 0 {
+		return "", nil, err
+	}
+
+	anchor := bothLiked[0]
+	anchorGenre := genreVector(anchor.Genre.String)
+
+	scored, _ := e.ScoreShowsTogether(ctx, userA, userB)
+	var matches []db.Show
+	for _, ss := range scored {
+		gv := genreVector(ss.Show.Genre.String)
+		for tag := range anchorGenre {
+			if gv[tag] > 0 {
+				matches = append(matches, ss.Show)
+				break
+			}
+		}
+		if len(matches) >= 6 {
+			break
+		}
+	}
+
+	return anchor.Title, matches, nil
+}
+
+func (e *Engine) GetTogetherVerdict(ctx context.Context, partnershipID, userA, userB int64) (*Verdict, error) {
+	// Check cache
+	cached, err := e.queries.GetPartnerVerdict(ctx, partnershipID)
+	if err == nil {
+		show, _ := e.queries.GetShowByID(ctx, cached.ShowID.String)
+		return &Verdict{
+			Headline: cached.Headline,
+			Body:     cached.Verdict,
+			ShowID:   cached.ShowID.String,
+			Show:     &show,
+		}, nil
+	}
+
+	return e.generateTogetherVerdict(ctx, partnershipID, userA, userB)
+}
+
+func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, userA, userB int64) (*Verdict, error) {
+	if e.anthropicKey == "" {
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
+	}
+
+	likedA, _ := e.queries.GetLikedShows(ctx, userA)
+	dislikedA, _ := e.queries.GetDislikedShows(ctx, userA)
+	likedB, _ := e.queries.GetLikedShows(ctx, userB)
+	dislikedB, _ := e.queries.GetDislikedShows(ctx, userB)
+
+	top, err := e.TopNTogether(ctx, userA, userB, 5)
+	if err != nil || len(top) == 0 {
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
+	}
+
+	prompt := fmt.Sprintf(
+		"You are an opinionated cinephile recommending a TV series for two people to watch together. "+
+			"Person A liked: %s. Person A disliked: %s. "+
+			"Person B liked: %s. Person B disliked: %s. "+
+			"Recommend exactly ONE series from this candidate list that they would BOTH enjoy: %s. "+
+			"Respond with valid JSON only, no markdown: "+
+			`{"pick":"<exact title>","headline":"Tonight, watch <Title> together.","verdict":"<2 sentences, max 50 words, explaining why this works for both>"}`,
+		titlesStr(likedA), titlesStr(dislikedA),
+		titlesStr(likedB), titlesStr(dislikedB),
+		titlesStr(top),
+	)
+
+	body := map[string]interface{}{
+		"model":      "claude-sonnet-4-20250514",
+		"max_tokens": 200,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+	}
+	bodyJSON, _ := json.Marshal(body)
+
+	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", e.anthropicKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Error("claude api error (together)", "error", err)
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		slog.Error("claude api non-200 (together)", "status", resp.StatusCode)
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
+	}
+
+	var apiResp struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
+	}
+
+	var verdictResp struct {
+		Pick     string `json:"pick"`
+		Headline string `json:"headline"`
+		Verdict  string `json:"verdict"`
+	}
+	if err := json.Unmarshal([]byte(apiResp.Content[0].Text), &verdictResp); err != nil {
+		slog.Error("failed to parse together verdict json", "error", err)
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
+	}
+
+	var showID string
+	for _, s := range top {
+		if strings.EqualFold(s.Title, verdictResp.Pick) {
+			showID = s.ID
+			break
+		}
+	}
+	if showID == "" && len(top) > 0 {
+		showID = top[0].ID
+	}
+
+	_ = e.queries.UpsertPartnerVerdict(ctx, db.UpsertPartnerVerdictParams{
+		PartnershipID: partnershipID,
+		Verdict:       verdictResp.Verdict,
+		Headline:      verdictResp.Headline,
+		ShowID:        db.NewNullString(showID),
+	})
+
+	show, _ := e.queries.GetShowByID(ctx, showID)
+	return &Verdict{
+		Headline: verdictResp.Headline,
+		Body:     verdictResp.Verdict,
+		ShowID:   showID,
+		Show:     &show,
+	}, nil
+}
+
+func (e *Engine) fallbackTogetherVerdict(ctx context.Context, partnershipID, userA, userB int64) (*Verdict, error) {
+	top, err := e.TopNTogether(ctx, userA, userB, 1)
+	if err != nil || len(top) == 0 {
+		return nil, fmt.Errorf("no shows to recommend together")
+	}
+	show := top[0]
+	headline := fmt.Sprintf("Tonight, watch %s together.", show.Title)
+	body := fmt.Sprintf("Based on both your tastes, %s looks like a great pick for a shared watch.", show.Title)
+
+	_ = e.queries.UpsertPartnerVerdict(ctx, db.UpsertPartnerVerdictParams{
+		PartnershipID: partnershipID,
+		Verdict:       body,
+		Headline:      headline,
+		ShowID:        db.NewNullString(show.ID),
+	})
+
+	return &Verdict{
+		Headline: headline,
+		Body:     body,
+		ShowID:   show.ID,
+		Show:     &show,
+	}, nil
+}
+
 func titlesStr(shows []db.Show) string {
 	var titles []string
 	for _, s := range shows {

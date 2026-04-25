@@ -76,3 +76,62 @@ ORDER BY r.rated_at DESC;
 SELECT s.* FROM shows s
 JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating = 'disliked'
 ORDER BY r.rated_at DESC;
+
+-- name: GetUserByEmail :one
+SELECT * FROM users WHERE email = ?;
+
+-- name: CreatePartnership :one
+INSERT INTO partnerships (user_id, partner_email, partner_id, status)
+VALUES (?, ?, ?, ?)
+RETURNING *;
+
+-- name: GetActivePartnershipsAsOwner :many
+SELECT p.id, p.user_id, p.partner_id, p.partner_email, p.status, p.created_at,
+       u.name AS partner_name, u.avatar_url AS partner_avatar
+FROM partnerships p
+LEFT JOIN users u ON u.id = p.partner_id
+WHERE p.user_id = ? AND p.status = 'active';
+
+-- name: GetActivePartnershipsAsPartner :many
+SELECT p.id, p.user_id, p.partner_id, p.partner_email, p.status, p.created_at,
+       u.name AS partner_name, u.avatar_url AS partner_avatar
+FROM partnerships p
+LEFT JOIN users u ON u.id = p.user_id
+WHERE p.partner_id = ? AND p.status = 'active';
+
+-- name: GetPendingPartnershipsByUser :many
+SELECT * FROM partnerships
+WHERE user_id = ? AND status = 'pending';
+
+-- name: GetIncomingPartnerRequests :many
+SELECT p.id, p.user_id, p.partner_email, p.status, p.created_at,
+       u.name AS requester_name, u.email AS requester_email
+FROM partnerships p
+JOIN users u ON u.id = p.user_id
+WHERE p.partner_email = ? AND p.status = 'pending';
+
+-- name: GetPartnershipByID :one
+SELECT * FROM partnerships WHERE id = ?;
+
+-- name: ActivatePartnership :exec
+UPDATE partnerships SET status = 'active', partner_id = ? WHERE id = ?;
+
+-- name: DeletePartnership :exec
+DELETE FROM partnerships WHERE id = ?;
+
+-- name: GetPartnerVerdict :one
+SELECT * FROM partner_verdicts
+WHERE partnership_id = ? AND created_at > datetime('now', '-1 day');
+
+-- name: UpsertPartnerVerdict :exec
+INSERT INTO partner_verdicts (partnership_id, verdict, headline, show_id)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(partnership_id) DO UPDATE SET
+  verdict=excluded.verdict, headline=excluded.headline,
+  show_id=excluded.show_id, created_at=CURRENT_TIMESTAMP;
+
+-- name: GetBothLikedShows :many
+SELECT s.* FROM shows s
+JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating = 'liked'
+JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating = 'liked'
+ORDER BY s.popularity DESC;

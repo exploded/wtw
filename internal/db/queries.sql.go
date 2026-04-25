@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+const activatePartnership = `-- name: ActivatePartnership :exec
+UPDATE partnerships SET status = 'active', partner_id = ? WHERE id = ?
+`
+
+type ActivatePartnershipParams struct {
+	PartnerID sql.NullInt64
+	ID        int64
+}
+
+func (q *Queries) ActivatePartnership(ctx context.Context, arg ActivatePartnershipParams) error {
+	_, err := q.db.ExecContext(ctx, activatePartnership, arg.PartnerID, arg.ID)
+	return err
+}
+
 const countRatings = `-- name: CountRatings :one
 SELECT
   SUM(CASE WHEN rating='liked' THEN 1 ELSE 0 END) AS liked,
@@ -29,6 +43,38 @@ func (q *Queries) CountRatings(ctx context.Context, userID int64) (CountRatingsR
 	row := q.db.QueryRowContext(ctx, countRatings, userID)
 	var i CountRatingsRow
 	err := row.Scan(&i.Liked, &i.Disliked, &i.Total)
+	return i, err
+}
+
+const createPartnership = `-- name: CreatePartnership :one
+INSERT INTO partnerships (user_id, partner_email, partner_id, status)
+VALUES (?, ?, ?, ?)
+RETURNING id, user_id, partner_id, partner_email, status, created_at
+`
+
+type CreatePartnershipParams struct {
+	UserID       int64
+	PartnerEmail string
+	PartnerID    sql.NullInt64
+	Status       string
+}
+
+func (q *Queries) CreatePartnership(ctx context.Context, arg CreatePartnershipParams) (Partnership, error) {
+	row := q.db.QueryRowContext(ctx, createPartnership,
+		arg.UserID,
+		arg.PartnerEmail,
+		arg.PartnerID,
+		arg.Status,
+	)
+	var i Partnership
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.PartnerID,
+		&i.PartnerEmail,
+		&i.Status,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
@@ -56,6 +102,15 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	return err
 }
 
+const deletePartnership = `-- name: DeletePartnership :exec
+DELETE FROM partnerships WHERE id = ?
+`
+
+func (q *Queries) DeletePartnership(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deletePartnership, id)
+	return err
+}
+
 const deleteRating = `-- name: DeleteRating :exec
 DELETE FROM ratings WHERE user_id = ? AND show_id = ?
 `
@@ -77,6 +132,153 @@ DELETE FROM sessions WHERE token = ?
 func (q *Queries) DeleteSession(ctx context.Context, token string) error {
 	_, err := q.db.ExecContext(ctx, deleteSession, token)
 	return err
+}
+
+const getActivePartnershipsAsOwner = `-- name: GetActivePartnershipsAsOwner :many
+SELECT p.id, p.user_id, p.partner_id, p.partner_email, p.status, p.created_at,
+       u.name AS partner_name, u.avatar_url AS partner_avatar
+FROM partnerships p
+LEFT JOIN users u ON u.id = p.partner_id
+WHERE p.user_id = ? AND p.status = 'active'
+`
+
+type GetActivePartnershipsAsOwnerRow struct {
+	ID            int64
+	UserID        int64
+	PartnerID     sql.NullInt64
+	PartnerEmail  string
+	Status        string
+	CreatedAt     time.Time
+	PartnerName   sql.NullString
+	PartnerAvatar sql.NullString
+}
+
+func (q *Queries) GetActivePartnershipsAsOwner(ctx context.Context, userID int64) ([]GetActivePartnershipsAsOwnerRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActivePartnershipsAsOwner, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActivePartnershipsAsOwnerRow
+	for rows.Next() {
+		var i GetActivePartnershipsAsOwnerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.PartnerID,
+			&i.PartnerEmail,
+			&i.Status,
+			&i.CreatedAt,
+			&i.PartnerName,
+			&i.PartnerAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getActivePartnershipsAsPartner = `-- name: GetActivePartnershipsAsPartner :many
+SELECT p.id, p.user_id, p.partner_id, p.partner_email, p.status, p.created_at,
+       u.name AS partner_name, u.avatar_url AS partner_avatar
+FROM partnerships p
+LEFT JOIN users u ON u.id = p.user_id
+WHERE p.partner_id = ? AND p.status = 'active'
+`
+
+type GetActivePartnershipsAsPartnerRow struct {
+	ID            int64
+	UserID        int64
+	PartnerID     sql.NullInt64
+	PartnerEmail  string
+	Status        string
+	CreatedAt     time.Time
+	PartnerName   sql.NullString
+	PartnerAvatar sql.NullString
+}
+
+func (q *Queries) GetActivePartnershipsAsPartner(ctx context.Context, partnerID sql.NullInt64) ([]GetActivePartnershipsAsPartnerRow, error) {
+	rows, err := q.db.QueryContext(ctx, getActivePartnershipsAsPartner, partnerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetActivePartnershipsAsPartnerRow
+	for rows.Next() {
+		var i GetActivePartnershipsAsPartnerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.PartnerID,
+			&i.PartnerEmail,
+			&i.Status,
+			&i.CreatedAt,
+			&i.PartnerName,
+			&i.PartnerAvatar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getBothLikedShows = `-- name: GetBothLikedShows :many
+SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
+JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating = 'liked'
+JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating = 'liked'
+ORDER BY s.popularity DESC
+`
+
+type GetBothLikedShowsParams struct {
+	UserID   int64
+	UserID_2 int64
+}
+
+func (q *Queries) GetBothLikedShows(ctx context.Context, arg GetBothLikedShowsParams) ([]Show, error) {
+	rows, err := q.db.QueryContext(ctx, getBothLikedShows, arg.UserID, arg.UserID_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Show
+	for rows.Next() {
+		var i Show
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Title,
+			&i.Year,
+			&i.PosterPath,
+			&i.Genre,
+			&i.Synopsis,
+			&i.Popularity,
+			&i.CachedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getDislikedShows = `-- name: GetDislikedShows :many
@@ -118,6 +320,55 @@ func (q *Queries) GetDislikedShows(ctx context.Context, userID int64) ([]Show, e
 	return items, nil
 }
 
+const getIncomingPartnerRequests = `-- name: GetIncomingPartnerRequests :many
+SELECT p.id, p.user_id, p.partner_email, p.status, p.created_at,
+       u.name AS requester_name, u.email AS requester_email
+FROM partnerships p
+JOIN users u ON u.id = p.user_id
+WHERE p.partner_email = ? AND p.status = 'pending'
+`
+
+type GetIncomingPartnerRequestsRow struct {
+	ID             int64
+	UserID         int64
+	PartnerEmail   string
+	Status         string
+	CreatedAt      time.Time
+	RequesterName  string
+	RequesterEmail string
+}
+
+func (q *Queries) GetIncomingPartnerRequests(ctx context.Context, partnerEmail string) ([]GetIncomingPartnerRequestsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getIncomingPartnerRequests, partnerEmail)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetIncomingPartnerRequestsRow
+	for rows.Next() {
+		var i GetIncomingPartnerRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.PartnerEmail,
+			&i.Status,
+			&i.CreatedAt,
+			&i.RequesterName,
+			&i.RequesterEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLikedShows = `-- name: GetLikedShows :many
 SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
 JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating = 'liked'
@@ -143,6 +394,77 @@ func (q *Queries) GetLikedShows(ctx context.Context, userID int64) ([]Show, erro
 			&i.Synopsis,
 			&i.Popularity,
 			&i.CachedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPartnerVerdict = `-- name: GetPartnerVerdict :one
+SELECT partnership_id, verdict, headline, show_id, created_at FROM partner_verdicts
+WHERE partnership_id = ? AND created_at > datetime('now', '-1 day')
+`
+
+func (q *Queries) GetPartnerVerdict(ctx context.Context, partnershipID int64) (PartnerVerdict, error) {
+	row := q.db.QueryRowContext(ctx, getPartnerVerdict, partnershipID)
+	var i PartnerVerdict
+	err := row.Scan(
+		&i.PartnershipID,
+		&i.Verdict,
+		&i.Headline,
+		&i.ShowID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getPartnershipByID = `-- name: GetPartnershipByID :one
+SELECT id, user_id, partner_id, partner_email, status, created_at FROM partnerships WHERE id = ?
+`
+
+func (q *Queries) GetPartnershipByID(ctx context.Context, id int64) (Partnership, error) {
+	row := q.db.QueryRowContext(ctx, getPartnershipByID, id)
+	var i Partnership
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.PartnerID,
+		&i.PartnerEmail,
+		&i.Status,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getPendingPartnershipsByUser = `-- name: GetPendingPartnershipsByUser :many
+SELECT id, user_id, partner_id, partner_email, status, created_at FROM partnerships
+WHERE user_id = ? AND status = 'pending'
+`
+
+func (q *Queries) GetPendingPartnershipsByUser(ctx context.Context, userID int64) ([]Partnership, error) {
+	rows, err := q.db.QueryContext(ctx, getPendingPartnershipsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Partnership
+	for rows.Next() {
+		var i Partnership
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.PartnerID,
+			&i.PartnerEmail,
+			&i.Status,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -264,6 +586,24 @@ func (q *Queries) GetUnratedShows(ctx context.Context, userID int64) ([]Show, er
 		return nil, err
 	}
 	return items, nil
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, google_sub, email, name, avatar_url, created_at FROM users WHERE email = ?
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.GoogleSub,
+		&i.Email,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
@@ -416,6 +756,31 @@ func (q *Queries) UpdateShowMeta(ctx context.Context, arg UpdateShowMetaParams) 
 		arg.TmdbID,
 		arg.Popularity,
 		arg.ID,
+	)
+	return err
+}
+
+const upsertPartnerVerdict = `-- name: UpsertPartnerVerdict :exec
+INSERT INTO partner_verdicts (partnership_id, verdict, headline, show_id)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(partnership_id) DO UPDATE SET
+  verdict=excluded.verdict, headline=excluded.headline,
+  show_id=excluded.show_id, created_at=CURRENT_TIMESTAMP
+`
+
+type UpsertPartnerVerdictParams struct {
+	PartnershipID int64
+	Verdict       string
+	Headline      string
+	ShowID        sql.NullString
+}
+
+func (q *Queries) UpsertPartnerVerdict(ctx context.Context, arg UpsertPartnerVerdictParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPartnerVerdict,
+		arg.PartnershipID,
+		arg.Verdict,
+		arg.Headline,
+		arg.ShowID,
 	)
 	return err
 }

@@ -9,6 +9,23 @@ import (
 	"time"
 )
 
+type PartnerVerdict struct {
+	PartnershipID int64
+	Verdict       string
+	Headline      string
+	ShowID        sql.NullString
+	CreatedAt     time.Time
+}
+
+type Partnership struct {
+	ID           int64
+	UserID       int64
+	PartnerID    sql.NullInt64
+	PartnerEmail string
+	Status       string
+	CreatedAt    time.Time
+}
+
 type Rating struct {
 	UserID  int64
 	ShowID  string

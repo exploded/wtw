@@ -44,7 +44,7 @@ func loadTemplates() {
 
 	// Each page template = layout + partials + page-specific content
 	pageTemplates = make(map[string]*template.Template)
-	pages := []string{"landing.html", "onboarding.html", "recs.html", "catalog.html", "profile.html"}
+	pages := []string{"landing.html", "onboarding.html", "recs.html", "catalog.html", "profile.html", "together.html"}
 	for _, page := range pages {
 		// Clone partials so each page gets its own template set
 		t := template.Must(partialTmpl.Clone())
@@ -130,17 +130,65 @@ func isHTMX(r *http.Request) bool {
 	return r.Header.Get("HX-Request") == "true"
 }
 
+// PartnerInfo holds data for the appbar partner tab
+type PartnerInfo struct {
+	PartnershipID   int64
+	PartnerName     string
+	PartnerInitials string
+}
+
 // PageData is the base data for full-page renders
 type PageData struct {
 	ActiveTab    string
 	UserName     string
 	UserEmail    string
 	UserInitials string
+	Partners     []PartnerInfo
 }
 
 func basePageData(r *http.Request, activeTab string) PageData {
 	name := middleware.GetUserName(r.Context())
 	email := middleware.GetUserEmail(r.Context())
+	ini := makeInitials(name)
+	return PageData{
+		ActiveTab:    activeTab,
+		UserName:     name,
+		UserEmail:    email,
+		UserInitials: ini,
+	}
+}
+
+func (h *Handler) basePageDataWithPartners(r *http.Request, activeTab string) PageData {
+	pd := basePageData(r, activeTab)
+	userID := middleware.GetUserID(r.Context())
+	if userID == 0 {
+		return pd
+	}
+
+	// Load active partnerships (as owner)
+	owned, _ := h.queries.GetActivePartnershipsAsOwner(r.Context(), userID)
+	for _, p := range owned {
+		pd.Partners = append(pd.Partners, PartnerInfo{
+			PartnershipID:   p.ID,
+			PartnerName:     p.PartnerName.String,
+			PartnerInitials: makeInitials(p.PartnerName.String),
+		})
+	}
+
+	// Load active partnerships (as partner)
+	asPartner, _ := h.queries.GetActivePartnershipsAsPartner(r.Context(), db.NewNullInt64(userID))
+	for _, p := range asPartner {
+		pd.Partners = append(pd.Partners, PartnerInfo{
+			PartnershipID:   p.ID,
+			PartnerName:     p.PartnerName.String,
+			PartnerInitials: makeInitials(p.PartnerName.String),
+		})
+	}
+
+	return pd
+}
+
+func makeInitials(name string) string {
 	ini := ""
 	words := splitWords(name)
 	for _, w := range words {
@@ -151,10 +199,8 @@ func basePageData(r *http.Request, activeTab string) PageData {
 			break
 		}
 	}
-	return PageData{
-		ActiveTab:    activeTab,
-		UserName:     name,
-		UserEmail:    email,
-		UserInitials: ini,
+	if ini == "" {
+		ini = "?"
 	}
+	return ini
 }

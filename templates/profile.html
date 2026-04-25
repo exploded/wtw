@@ -46,6 +46,72 @@
   {{end}}
 
   <section class="profile__settings">
+    <h4 class="h-section">Partners</h4>
+
+    {{if .ActivePartners}}
+    {{range .ActivePartners}}
+    <div class="settings-row">
+      <div class="partner-row">
+        <div class="partner-avatar">{{.Initials}}</div>
+        <div>
+          <strong>{{.Name}}</strong>
+          <p>{{.Email}}</p>
+        </div>
+      </div>
+      <div class="partner-actions">
+        <a href="/together/{{.PartnershipID}}" class="btn btn--ghost btn--sm">Watch together</a>
+        <button class="btn btn--ghost btn--sm btn--danger"
+                hx-post="/partners/{{.PartnershipID}}/remove"
+                hx-confirm="Remove this partner?">Remove</button>
+      </div>
+    </div>
+    {{end}}
+    {{end}}
+
+    {{if .PendingPartners}}
+    {{range .PendingPartners}}
+    <div class="settings-row">
+      <div>
+        <strong>Pending</strong>
+        <p>Waiting for {{.Email}} to accept...</p>
+      </div>
+      <button class="btn btn--ghost btn--sm btn--danger"
+              hx-post="/partners/{{.PartnershipID}}/remove">Cancel</button>
+    </div>
+    {{end}}
+    {{end}}
+
+    {{if .IncomingRequests}}
+    {{range .IncomingRequests}}
+    <div class="settings-row settings-row--incoming">
+      <div>
+        <strong>{{.Name}}</strong>
+        <p>{{.Email}} wants to link with you</p>
+      </div>
+      <div class="partner-actions">
+        <button class="btn btn--primary btn--sm"
+                hx-post="/partners/{{.PartnershipID}}/accept">Accept</button>
+        <button class="btn btn--ghost btn--sm btn--danger"
+                hx-post="/partners/{{.PartnershipID}}/remove">Decline</button>
+      </div>
+    </div>
+    {{end}}
+    {{end}}
+
+    <div class="settings-row">
+      <div>
+        <strong>Add a partner</strong>
+        <p>Enter their email to link accounts and get shared recommendations.</p>
+      </div>
+      <form class="partner-form" hx-post="/partners/add" hx-target="#partnerMsg" hx-swap="innerHTML">
+        <input type="email" name="email" placeholder="partner@example.com" required class="partner-input">
+        <button type="submit" class="btn btn--primary btn--sm">Link</button>
+      </form>
+    </div>
+    <div id="partnerMsg"></div>
+  </section>
+
+  <section class="profile__settings">
     <h4 class="h-section">Account</h4>
     <div class="settings-row">
       <div>

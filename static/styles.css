@@ -1060,3 +1060,67 @@ em { font-style: italic; }
 
 /* htmx loading indicator */
 .htmx-request { opacity: 0.6; transition: opacity .2s ease; }
+
+/* ==========================================================================
+   Partner mode
+   ========================================================================== */
+.together-header {
+  margin-bottom: 32px;
+}
+.together-header .lede { margin-bottom: 0; }
+.together-header strong { color: var(--accent); }
+
+.partner-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.partner-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3a2a1c, #b8772e);
+  color: var(--ink-0);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  border: 1px solid rgba(255,255,255,.08);
+  flex: none;
+}
+.partner-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.partner-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.partner-input {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 16px;
+  color: var(--ink-0);
+  font-size: 14px;
+  width: 260px;
+  outline: none;
+}
+.partner-input:focus { border-color: var(--accent); }
+.partner-input::placeholder { color: var(--ink-3); }
+.partner-msg {
+  font-size: 14px;
+  padding: 12px 0 0;
+}
+.partner-msg--error { color: var(--dislike); }
+.partner-msg--ok { color: var(--like); }
+.settings-row--incoming {
+  background: rgba(231, 168, 87, 0.04);
+  border-radius: var(--r-md);
+  padding: 18px 16px;
+  margin: -4px -16px;
+}
