@@ -43,6 +43,13 @@
         <div><span class="stat__num">{{.ShowCount}}</span><span class="stat__lbl">in catalog</span></div>
       </div>
     </section>
+
+    {{if .TasteSummary}}
+    <section class="taste-card taste-card--summary">
+      <h4 class="taste-card__title">Your taste</h4>
+      <p class="taste-summary">{{.TasteSummary}}</p>
+    </section>
+    {{end}}
   </div>
   {{end}}
 

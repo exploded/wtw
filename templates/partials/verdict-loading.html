@@ -1,0 +1,17 @@
+{{define "verdict-loading"}}
+<section class="recs__hero recs__hero--loading"
+         hx-get="/recs" hx-trigger="load" hx-select="main.recs" hx-target="closest main" hx-swap="outerHTML" hx-push-url="false">
+  <div class="recs__hero-head">
+    <p class="eyebrow eyebrow--accent">Tonight's verdict</p>
+  </div>
+  <div class="skel skel--headline"></div>
+  <div class="skel-row">
+    <div class="skel skel--avatar"></div>
+    <div class="skel-col">
+      <div class="skel skel--line"></div>
+      <div class="skel skel--line skel--short"></div>
+    </div>
+  </div>
+  <p class="verdict-loading-hint">Your cinephile is thinking&hellip;</p>
+</section>
+{{end}}

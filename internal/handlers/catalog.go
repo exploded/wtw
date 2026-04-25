@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"database/sql"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"wtw/internal/middleware"
+	"wtw/internal/tmdb"
 )
 
 type CatalogData struct {
@@ -114,4 +117,61 @@ func (h *Handler) CatalogFilter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderPartial(w, "poster-grid", filtered)
+}
+
+type TMDBSearchResult struct {
+	tmdb.TVResult
+	AlreadyInDB bool
+}
+
+func (h *Handler) CatalogSearchTMDB(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	results, err := h.tmdbClient.SearchTVMulti(r.Context(), query)
+	if err != nil {
+		renderPartial(w, "tmdb-results", []TMDBSearchResult{})
+		return
+	}
+
+	var out []TMDBSearchResult
+	for _, res := range results {
+		alreadyIn := false
+		if res.TmdbID > 0 {
+			_, err := h.queries.GetShowByTmdbID(r.Context(), sql.NullInt64{Int64: res.TmdbID, Valid: true})
+			if err == nil {
+				alreadyIn = true
+			}
+		}
+		out = append(out, TMDBSearchResult{TVResult: res, AlreadyInDB: alreadyIn})
+	}
+
+	renderPartial(w, "tmdb-results", out)
+}
+
+func (h *Handler) CatalogAddTMDB(w http.ResponseWriter, r *http.Request) {
+	tmdbIDStr := r.PathValue("tmdb_id")
+	tmdbID, err := strconv.ParseInt(tmdbIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid tmdb_id", http.StatusBadRequest)
+		return
+	}
+
+	show, err := h.tmdbClient.EnsureShow(r.Context(), tmdbID)
+	if err != nil {
+		http.Error(w, "failed to add show", http.StatusInternalServerError)
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	ratingMap := make(map[string]string)
+	for _, rating := range ratings {
+		ratingMap[rating.ShowID] = rating.Rating
+	}
+
+	renderPartial(w, "poster-card", ShowWithRating{Show: *show, Rating: ratingMap[show.ID]})
 }

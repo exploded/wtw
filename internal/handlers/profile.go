@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -39,11 +40,109 @@ type ProfileData struct {
 	TopShows         []db.Show
 	ShowCount        int
 	MemberSince      string
+	TasteSummary     string
 	ActivePartners   []ActivePartner
 	PendingPartners  []PendingPartner
 	IncomingRequests []IncomingRequest
 	PartnerError     string
 	PartnerSuccess   string
+}
+
+func buildTasteSummary(ratings []db.GetUserRatingsWithShowsRow) string {
+	if len(ratings) == 0 {
+		return ""
+	}
+
+	likedGenres := map[string]int{}
+	dislikedGenres := map[string]int{}
+	var totalLiked, totalDisliked int
+
+	for _, r := range ratings {
+		genre := r.Genre.String
+		if genre == "" {
+			continue
+		}
+		switch r.Rating {
+		case "favourite", "liked":
+			likedGenres[genre]++
+			totalLiked++
+		case "disliked":
+			dislikedGenres[genre]++
+			totalDisliked++
+		}
+	}
+
+	if totalLiked == 0 {
+		return ""
+	}
+
+	type genreCount struct {
+		name  string
+		count int
+	}
+	ranked := make([]genreCount, 0, len(likedGenres))
+	for g, c := range likedGenres {
+		ranked = append(ranked, genreCount{g, c})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].count != ranked[j].count {
+			return ranked[i].count > ranked[j].count
+		}
+		return ranked[i].name < ranked[j].name
+	})
+
+	// Top genres the user enjoys
+	topN := ranked
+	if len(topN) > 3 {
+		topN = topN[:3]
+	}
+	names := make([]string, len(topN))
+	for i, g := range topN {
+		names[i] = strings.ToLower(g.name)
+	}
+
+	var parts []string
+	switch len(names) {
+	case 1:
+		parts = append(parts, fmt.Sprintf("You're drawn to %s", names[0]))
+	case 2:
+		parts = append(parts, fmt.Sprintf("You're drawn to %s and %s", names[0], names[1]))
+	default:
+		parts = append(parts, fmt.Sprintf("You're drawn to %s, %s, and %s", names[0], names[1], names[2]))
+	}
+
+	if len(ranked) > 4 {
+		parts[0] += ", with broad taste across many genres"
+	}
+
+	// Genres the user tends to avoid
+	if totalDisliked > 0 {
+		avoided := make([]genreCount, 0, len(dislikedGenres))
+		for g, c := range dislikedGenres {
+			if likedGenres[g] == 0 || c > likedGenres[g] {
+				avoided = append(avoided, genreCount{g, c})
+			}
+		}
+		sort.Slice(avoided, func(i, j int) bool {
+			return avoided[i].count > avoided[j].count
+		})
+		if len(avoided) > 2 {
+			avoided = avoided[:2]
+		}
+		if len(avoided) > 0 {
+			avoidNames := make([]string, len(avoided))
+			for i, g := range avoided {
+				avoidNames[i] = strings.ToLower(g.name)
+			}
+			if len(avoidNames) == 1 {
+				parts = append(parts, fmt.Sprintf("and tend to skip %s", avoidNames[0]))
+			} else {
+				parts = append(parts, fmt.Sprintf("and tend to skip %s and %s", avoidNames[0], avoidNames[1]))
+			}
+		}
+	}
+
+	return strings.Join(parts, ", ") + "."
 }
 
 func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
@@ -64,17 +163,19 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, _ := h.queries.GetUserByID(r.Context(), userID)
+	ratingsWithShows, _ := h.queries.GetUserRatingsWithShows(r.Context(), userID)
 
 	data := ProfileData{
-		PageData:    h.basePageDataWithPartners(r, "profile"),
-		Favourite:   favourite,
-		Liked:       liked,
-		Disliked:    disliked,
-		Total:       counts.Total,
-		LikedShows:  likedShows,
-		TopShows:    topShows,
-		ShowCount:   len(shows),
-		MemberSince: user.CreatedAt.Format("January 2006"),
+		PageData:     h.basePageDataWithPartners(r, "profile"),
+		Favourite:    favourite,
+		Liked:        liked,
+		Disliked:     disliked,
+		Total:        counts.Total,
+		LikedShows:   likedShows,
+		TopShows:     topShows,
+		ShowCount:    len(shows),
+		MemberSince:  user.CreatedAt.Format("January 2006"),
+		TasteSummary: buildTasteSummary(ratingsWithShows),
 	}
 
 	// Active partnerships (as owner)

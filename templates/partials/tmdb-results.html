@@ -1,0 +1,33 @@
+{{define "tmdb-results"}}
+<div class="tmdb-results">
+  {{if .}}
+  {{range .}}
+  <div class="tmdb-result">
+    <div class="tmdb-result__poster">
+      {{if .PosterPath}}
+      <img src="https://image.tmdb.org/t/p/w154{{.PosterPath}}" alt="{{.Name}}" loading="lazy">
+      {{else}}
+      <div class="tmdb-result__poster-fb">{{.Name}}</div>
+      {{end}}
+    </div>
+    <div class="tmdb-result__info">
+      <span class="tmdb-result__title">{{.Name}}</span>
+      <span class="tmdb-result__year">{{.Year}}{{if .Genre}} &middot; {{.Genre}}{{end}}</span>
+    </div>
+    <div class="tmdb-result__action">
+      {{if .AlreadyInDB}}
+      <span class="badge badge--muted">In catalog</span>
+      {{else}}
+      <button class="btn btn--sm btn--accent"
+              hx-post="/catalog/add-tmdb/{{.TmdbID}}"
+              hx-target="closest .tmdb-result"
+              hx-swap="outerHTML">Add</button>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+  {{else}}
+  <p class="tmdb-results__empty">No results found on TMDB.</p>
+  {{end}}
+</div>
+{{end}}

@@ -74,8 +74,7 @@ func (h *Handler) Recs(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RecsNewVerdict(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	_ = h.queries.DeleteVerdict(r.Context(), userID)
-	w.Header().Set("HX-Redirect", "/recs")
-	w.WriteHeader(http.StatusOK)
+	renderPartial(w, "verdict-loading", nil)
 }
 
 func (h *Handler) RecsRefresh(w http.ResponseWriter, r *http.Request) {

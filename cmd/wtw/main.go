@@ -163,10 +163,10 @@ func main() {
 	tmdbClient.StartRefreshLoop(context.Background())
 
 	// Recommendation engine
-	engine := recommend.NewEngine(queries, os.Getenv("ANTHROPIC_API_KEY"))
+	engine := recommend.NewEngine(queries, os.Getenv("ANTHROPIC_API_KEY"), tmdbClient)
 
 	// Handlers
-	h := handlers.New(queries, store, engine)
+	h := handlers.New(queries, store, engine, tmdbClient)
 
 	// Routes
 	mux := http.NewServeMux()
@@ -181,6 +181,8 @@ func main() {
 	mux.HandleFunc("GET /onboarding", middleware.RequireAuth(store, h.Onboarding))
 	mux.HandleFunc("GET /catalog", middleware.RequireAuth(store, h.Catalog))
 	mux.HandleFunc("GET /catalog/filter", middleware.RequireAuth(store, h.CatalogFilter))
+	mux.HandleFunc("GET /catalog/tmdb-search", middleware.RequireAuth(store, h.CatalogSearchTMDB))
+	mux.HandleFunc("POST /catalog/add-tmdb/{tmdb_id}", middleware.RequireAuth(store, h.CatalogAddTMDB))
 	mux.HandleFunc("GET /recs", middleware.RequireAuth(store, h.Recs))
 	mux.HandleFunc("GET /recs/refresh", middleware.RequireAuth(store, h.RecsRefresh))
 	mux.HandleFunc("POST /recs/new-verdict", middleware.RequireAuth(store, h.RecsNewVerdict))

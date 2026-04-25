@@ -11,21 +11,24 @@ import (
 	"strings"
 
 	"wtw/internal/db"
+	"wtw/internal/tmdb"
 )
 
 type Engine struct {
 	queries      *db.Queries
 	anthropicKey string
+	tmdbClient   *tmdb.Client
 }
 
-func NewEngine(queries *db.Queries, anthropicKey string) *Engine {
-	return &Engine{queries: queries, anthropicKey: anthropicKey}
+func NewEngine(queries *db.Queries, anthropicKey string, tmdbClient *tmdb.Client) *Engine {
+	return &Engine{queries: queries, anthropicKey: anthropicKey, tmdbClient: tmdbClient}
 }
 
 // Genre tags used for scoring
 var genreTags = []string{
 	"Crime", "Drama", "Sci-fi", "Comedy", "Fantasy", "Period",
 	"Mystery", "Thriller", "Animated", "War", "Western", "Spy", "Limited",
+	"Action", "Documentary", "Reality", "Family", "Horror",
 }
 
 func genreVector(genre string) map[string]float64 {
@@ -216,22 +219,21 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 	}
 	disliked, _ := e.queries.GetDislikedShows(ctx, userID)
 
-	top, err := e.TopN(ctx, userID, 5)
-	if err != nil || len(top) == 0 {
-		return e.fallbackVerdict(ctx, userID)
-	}
-
 	favouriteTitles := titlesStr(favourites)
 	likedTitles := titlesStr(liked)
 	dislikedTitles := titlesStr(disliked)
-	candidateTitles := titlesStr(top)
+
+	// Build a list of already-rated titles so the AI avoids them
+	allRated := append(append(favourites, liked...), disliked...)
+	ratedTitles := titlesStr(allRated)
 
 	prompt := fmt.Sprintf(
 		"You are an opinionated cinephile recommending TV series. The user's absolute favourites: %s. They also liked: %s. They disliked: %s. "+
-			"Recommend exactly ONE TV series from this candidate list: %s. "+
+			"Recommend exactly ONE TV series you think the user would love. It can be any TV series ever made -- do not limit yourself to a specific list. "+
+			"Do NOT recommend any of these already-rated shows: %s. "+
 			"Respond with valid JSON only, no markdown: "+
 			`{"pick":"<exact title>","headline":"You should watch <Title>.","verdict":"<2 sentences, max 50 words, in the voice of a knowledgeable film-friend explaining why>"}`,
-		favouriteTitles, likedTitles, dislikedTitles, candidateTitles,
+		favouriteTitles, likedTitles, dislikedTitles, ratedTitles,
 	)
 
 	body := map[string]interface{}{
@@ -279,16 +281,11 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		return e.fallbackVerdict(ctx, userID)
 	}
 
-	// Find the show ID
-	var showID string
-	for _, s := range top {
-		if strings.EqualFold(s.Title, verdictResp.Pick) {
-			showID = s.ID
-			break
-		}
-	}
-	if showID == "" && len(top) > 0 {
-		showID = top[0].ID
+	// Resolve the picked show: check DB first, then fetch from TMDB
+	show, err := e.resolveShow(ctx, verdictResp.Pick)
+	if err != nil {
+		slog.Warn("could not resolve verdict pick, falling back", "pick", verdictResp.Pick, "error", err)
+		return e.fallbackVerdict(ctx, userID)
 	}
 
 	// Cache it
@@ -296,16 +293,31 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		UserID:   userID,
 		Verdict:  verdictResp.Verdict,
 		Headline: verdictResp.Headline,
-		ShowID:   db.NewNullString(showID),
+		ShowID:   db.NewNullString(show.ID),
 	})
 
-	show, _ := e.queries.GetShowByID(ctx, showID)
 	return &Verdict{
 		Headline: verdictResp.Headline,
 		Body:     verdictResp.Verdict,
-		ShowID:   showID,
-		Show:     &show,
+		ShowID:   show.ID,
+		Show:     show,
 	}, nil
+}
+
+// resolveShow looks up a show by title in the DB, falling back to TMDB search+insert.
+func (e *Engine) resolveShow(ctx context.Context, title string) (*db.Show, error) {
+	// Check DB first
+	show, err := e.queries.GetShowByTitle(ctx, title)
+	if err == nil {
+		return &show, nil
+	}
+
+	// Not in DB -- try TMDB
+	if e.tmdbClient != nil {
+		return e.tmdbClient.EnsureShowByTitle(ctx, title)
+	}
+
+	return nil, fmt.Errorf("show %q not found and no TMDB client", title)
 }
 
 func (e *Engine) fallbackVerdict(ctx context.Context, userID int64) (*Verdict, error) {
@@ -513,21 +525,22 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 	likedB, _ := e.queries.GetLikedShows(ctx, userB)
 	dislikedB, _ := e.queries.GetDislikedShows(ctx, userB)
 
-	top, err := e.TopNTogether(ctx, userA, userB, 5)
-	if err != nil || len(top) == 0 {
-		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
-	}
+	// Build list of already-rated titles for both users
+	allRated := append(append(append(favouritesA, likedA...), dislikedA...), favouritesB...)
+	allRated = append(append(allRated, likedB...), dislikedB...)
+	ratedTitles := titlesStr(allRated)
 
 	prompt := fmt.Sprintf(
 		"You are an opinionated cinephile recommending a TV series for two people to watch together. "+
 			"Person A's favourites: %s. Person A also liked: %s. Person A disliked: %s. "+
 			"Person B's favourites: %s. Person B also liked: %s. Person B disliked: %s. "+
-			"Recommend exactly ONE series from this candidate list that they would BOTH enjoy: %s. "+
+			"Recommend exactly ONE TV series you think they would BOTH enjoy. It can be any TV series ever made. "+
+			"Do NOT recommend any of these already-rated shows: %s. "+
 			"Respond with valid JSON only, no markdown: "+
 			`{"pick":"<exact title>","headline":"Tonight, watch <Title> together.","verdict":"<2 sentences, max 50 words, explaining why this works for both>"}`,
 		titlesStr(favouritesA), titlesStr(likedA), titlesStr(dislikedA),
 		titlesStr(favouritesB), titlesStr(likedB), titlesStr(dislikedB),
-		titlesStr(top),
+		ratedTitles,
 	)
 
 	body := map[string]interface{}{
@@ -575,30 +588,24 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}
 
-	var showID string
-	for _, s := range top {
-		if strings.EqualFold(s.Title, verdictResp.Pick) {
-			showID = s.ID
-			break
-		}
-	}
-	if showID == "" && len(top) > 0 {
-		showID = top[0].ID
+	show, err := e.resolveShow(ctx, verdictResp.Pick)
+	if err != nil {
+		slog.Warn("could not resolve together verdict pick, falling back", "pick", verdictResp.Pick, "error", err)
+		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}
 
 	_ = e.queries.UpsertPartnerVerdict(ctx, db.UpsertPartnerVerdictParams{
 		PartnershipID: partnershipID,
 		Verdict:       verdictResp.Verdict,
 		Headline:      verdictResp.Headline,
-		ShowID:        db.NewNullString(showID),
+		ShowID:        db.NewNullString(show.ID),
 	})
 
-	show, _ := e.queries.GetShowByID(ctx, showID)
 	return &Verdict{
 		Headline: verdictResp.Headline,
 		Body:     verdictResp.Verdict,
-		ShowID:   showID,
-		Show:     &show,
+		ShowID:   show.ID,
+		Show:     show,
 	}, nil
 }
 

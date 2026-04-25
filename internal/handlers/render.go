@@ -11,6 +11,7 @@ import (
 	"wtw/internal/middleware"
 	"wtw/internal/recommend"
 	"wtw/internal/session"
+	"wtw/internal/tmdb"
 )
 
 var (
@@ -84,13 +85,14 @@ func splitWords(s string) []string {
 }
 
 type Handler struct {
-	queries *db.Queries
-	store   *session.Store
-	engine  *recommend.Engine
+	queries    *db.Queries
+	store      *session.Store
+	engine     *recommend.Engine
+	tmdbClient *tmdb.Client
 }
 
-func New(queries *db.Queries, store *session.Store, engine *recommend.Engine) *Handler {
-	return &Handler{queries: queries, store: store, engine: engine}
+func New(queries *db.Queries, store *session.Store, engine *recommend.Engine, tmdbClient *tmdb.Client) *Handler {
+	return &Handler{queries: queries, store: store, engine: engine, tmdbClient: tmdbClient}
 }
 
 func renderPage(w http.ResponseWriter, name string, data interface{}) {

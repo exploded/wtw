@@ -144,3 +144,16 @@ SELECT s.* FROM shows s
 JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating IN ('liked', 'favourite')
 JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating IN ('liked', 'favourite')
 ORDER BY s.popularity DESC;
+
+-- name: InsertShow :exec
+INSERT OR IGNORE INTO shows (id, tmdb_id, title, year, poster_path, genre, synopsis, popularity)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetShowByTmdbID :one
+SELECT * FROM shows WHERE tmdb_id = ?;
+
+-- name: GetShowByTitle :one
+SELECT * FROM shows WHERE LOWER(title) = LOWER(?) LIMIT 1;
+
+-- name: CountShows :one
+SELECT COUNT(*) FROM shows;

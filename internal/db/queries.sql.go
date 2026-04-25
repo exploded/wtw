@@ -53,6 +53,17 @@ func (q *Queries) CountRatings(ctx context.Context, userID int64) (CountRatingsR
 	return i, err
 }
 
+const countShows = `-- name: CountShows :one
+SELECT COUNT(*) FROM shows
+`
+
+func (q *Queries) CountShows(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countShows)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPartnership = `-- name: CreatePartnership :one
 INSERT INTO partnerships (user_id, partner_email, partner_id, status)
 VALUES (?, ?, ?, ?)
@@ -566,6 +577,48 @@ func (q *Queries) GetShowByID(ctx context.Context, id string) (Show, error) {
 	return i, err
 }
 
+const getShowByTitle = `-- name: GetShowByTitle :one
+SELECT id, tmdb_id, title, year, poster_path, genre, synopsis, popularity, cached_at FROM shows WHERE LOWER(title) = LOWER(?) LIMIT 1
+`
+
+func (q *Queries) GetShowByTitle(ctx context.Context, lower string) (Show, error) {
+	row := q.db.QueryRowContext(ctx, getShowByTitle, lower)
+	var i Show
+	err := row.Scan(
+		&i.ID,
+		&i.TmdbID,
+		&i.Title,
+		&i.Year,
+		&i.PosterPath,
+		&i.Genre,
+		&i.Synopsis,
+		&i.Popularity,
+		&i.CachedAt,
+	)
+	return i, err
+}
+
+const getShowByTmdbID = `-- name: GetShowByTmdbID :one
+SELECT id, tmdb_id, title, year, poster_path, genre, synopsis, popularity, cached_at FROM shows WHERE tmdb_id = ?
+`
+
+func (q *Queries) GetShowByTmdbID(ctx context.Context, tmdbID sql.NullInt64) (Show, error) {
+	row := q.db.QueryRowContext(ctx, getShowByTmdbID, tmdbID)
+	var i Show
+	err := row.Scan(
+		&i.ID,
+		&i.TmdbID,
+		&i.Title,
+		&i.Year,
+		&i.PosterPath,
+		&i.Genre,
+		&i.Synopsis,
+		&i.Popularity,
+		&i.CachedAt,
+	)
+	return i, err
+}
+
 const getShows = `-- name: GetShows :many
 SELECT id, tmdb_id, title, year, poster_path, genre, synopsis, popularity, cached_at FROM shows ORDER BY popularity DESC
 `
@@ -772,6 +825,36 @@ func (q *Queries) GetVerdict(ctx context.Context, userID int64) (Verdict, error)
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertShow = `-- name: InsertShow :exec
+INSERT OR IGNORE INTO shows (id, tmdb_id, title, year, poster_path, genre, synopsis, popularity)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertShowParams struct {
+	ID         string
+	TmdbID     sql.NullInt64
+	Title      string
+	Year       string
+	PosterPath sql.NullString
+	Genre      sql.NullString
+	Synopsis   sql.NullString
+	Popularity sql.NullFloat64
+}
+
+func (q *Queries) InsertShow(ctx context.Context, arg InsertShowParams) error {
+	_, err := q.db.ExecContext(ctx, insertShow,
+		arg.ID,
+		arg.TmdbID,
+		arg.Title,
+		arg.Year,
+		arg.PosterPath,
+		arg.Genre,
+		arg.Synopsis,
+		arg.Popularity,
+	)
+	return err
 }
 
 const setRating = `-- name: SetRating :exec
