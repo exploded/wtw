@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS shows (
 CREATE TABLE IF NOT EXISTS ratings (
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   show_id       TEXT    NOT NULL REFERENCES shows(id),
-  rating        TEXT    NOT NULL CHECK (rating IN ('liked','disliked','unseen')),
+  rating        TEXT    NOT NULL CHECK (rating IN ('favourite','liked','disliked','unseen')),
   rated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, show_id)
 );

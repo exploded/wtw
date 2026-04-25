@@ -54,6 +54,11 @@
                   hx-target="closest .rec-feature"
                   hx-swap="outerHTML">Not for me</button>
         </div>
+        <p class="rec-feature__fav-hint">Already watched and loved it? <button class="btn-link"
+           hx-post="/ratings/{{.Verdict.Show.ID}}"
+           hx-vals='{"rating":"favourite"}'
+           hx-target="closest .rec-feature"
+           hx-swap="outerHTML">Mark as favourite</button></p>
       </div>
     </div>
     {{end}}

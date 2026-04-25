@@ -31,6 +31,7 @@ type IncomingRequest struct {
 
 type ProfileData struct {
 	PageData
+	Favourite        int64
 	Liked            int64
 	Disliked         int64
 	Total            int64
@@ -50,6 +51,7 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	userEmail := middleware.GetUserEmail(r.Context())
 
 	counts, _ := h.queries.CountRatings(r.Context(), userID)
+	favourite := int64(counts.Favourite.Float64)
 	liked := int64(counts.Liked.Float64)
 	disliked := int64(counts.Disliked.Float64)
 
@@ -65,6 +67,7 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 
 	data := ProfileData{
 		PageData:    h.basePageDataWithPartners(r, "profile"),
+		Favourite:   favourite,
 		Liked:       liked,
 		Disliked:    disliked,
 		Total:       counts.Total,

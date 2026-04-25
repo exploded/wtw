@@ -17,7 +17,7 @@ func (h *Handler) SetRating(w http.ResponseWriter, r *http.Request) {
 	showID := r.PathValue("show_id")
 	rating := r.FormValue("rating")
 
-	if rating != "liked" && rating != "disliked" && rating != "unseen" {
+	if rating != "favourite" && rating != "liked" && rating != "disliked" && rating != "unseen" {
 		http.Error(w, "invalid rating", http.StatusBadRequest)
 		return
 	}

@@ -9,6 +9,7 @@
       <p class="lede lede--tight">Rate as much or as little as you like. Filters narrow the wall.</p>
     </div>
     <div class="catalog__stats">
+      <div class="stat"><span class="stat__num">{{.Favourite}}</span><span class="stat__lbl">favourite</span></div>
       <div class="stat"><span class="stat__num">{{.Liked}}</span><span class="stat__lbl">liked</span></div>
       <div class="stat"><span class="stat__num">{{.Disliked}}</span><span class="stat__lbl">disliked</span></div>
       <div class="stat"><span class="stat__num">{{.Unrated}}</span><span class="stat__lbl">unrated</span></div>
@@ -29,6 +30,9 @@
       <button class="filter{{if or (eq .Filter "") (eq .Filter "all")}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=all"
               hx-target="#catalogGrid">All</button>
+      <button class="filter{{if eq .Filter "favourite"}} filter--active{{end}}"
+              hx-get="/catalog/filter?filter=favourite"
+              hx-target="#catalogGrid">Favourite</button>
       <button class="filter{{if eq .Filter "liked"}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=liked"
               hx-target="#catalogGrid">Liked</button>

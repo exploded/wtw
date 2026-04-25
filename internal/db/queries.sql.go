@@ -27,6 +27,7 @@ func (q *Queries) ActivatePartnership(ctx context.Context, arg ActivatePartnersh
 
 const countRatings = `-- name: CountRatings :one
 SELECT
+  SUM(CASE WHEN rating='favourite' THEN 1 ELSE 0 END) AS favourite,
   SUM(CASE WHEN rating='liked' THEN 1 ELSE 0 END) AS liked,
   SUM(CASE WHEN rating='disliked' THEN 1 ELSE 0 END) AS disliked,
   COUNT(*) AS total
@@ -34,15 +35,21 @@ FROM ratings WHERE user_id = ?
 `
 
 type CountRatingsRow struct {
-	Liked    sql.NullFloat64
-	Disliked sql.NullFloat64
-	Total    int64
+	Favourite sql.NullFloat64
+	Liked     sql.NullFloat64
+	Disliked  sql.NullFloat64
+	Total     int64
 }
 
 func (q *Queries) CountRatings(ctx context.Context, userID int64) (CountRatingsRow, error) {
 	row := q.db.QueryRowContext(ctx, countRatings, userID)
 	var i CountRatingsRow
-	err := row.Scan(&i.Liked, &i.Disliked, &i.Total)
+	err := row.Scan(
+		&i.Favourite,
+		&i.Liked,
+		&i.Disliked,
+		&i.Total,
+	)
 	return i, err
 }
 
@@ -238,8 +245,8 @@ func (q *Queries) GetActivePartnershipsAsPartner(ctx context.Context, partnerID 
 
 const getBothLikedShows = `-- name: GetBothLikedShows :many
 SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
-JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating = 'liked'
-JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating = 'liked'
+JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating IN ('liked', 'favourite')
+JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating IN ('liked', 'favourite')
 ORDER BY s.popularity DESC
 `
 
@@ -289,6 +296,45 @@ ORDER BY r.rated_at DESC
 
 func (q *Queries) GetDislikedShows(ctx context.Context, userID int64) ([]Show, error) {
 	rows, err := q.db.QueryContext(ctx, getDislikedShows, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Show
+	for rows.Next() {
+		var i Show
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Title,
+			&i.Year,
+			&i.PosterPath,
+			&i.Genre,
+			&i.Synopsis,
+			&i.Popularity,
+			&i.CachedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFavouriteShows = `-- name: GetFavouriteShows :many
+SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
+JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating = 'favourite'
+ORDER BY r.rated_at DESC
+`
+
+func (q *Queries) GetFavouriteShows(ctx context.Context, userID int64) ([]Show, error) {
+	rows, err := q.db.QueryContext(ctx, getFavouriteShows, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +417,7 @@ func (q *Queries) GetIncomingPartnerRequests(ctx context.Context, partnerEmail s
 
 const getLikedShows = `-- name: GetLikedShows :many
 SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
-JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating = 'liked'
+JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating IN ('liked', 'favourite')
 ORDER BY r.rated_at DESC
 `
 

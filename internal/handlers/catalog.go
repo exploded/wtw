@@ -10,6 +10,7 @@ import (
 type CatalogData struct {
 	PageData
 	Shows     []ShowWithRating
+	Favourite int64
 	Liked     int64
 	Disliked  int64
 	Unrated   int64
@@ -56,15 +57,17 @@ func (h *Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 		filtered = append(filtered, swr)
 	}
 
+	favourite := int64(counts.Favourite.Float64)
 	liked := int64(counts.Liked.Float64)
 	disliked := int64(counts.Disliked.Float64)
 
 	data := CatalogData{
 		PageData:  h.basePageDataWithPartners(r, "catalog"),
 		Shows:     filtered,
+		Favourite: favourite,
 		Liked:     liked,
 		Disliked:  disliked,
-		Unrated:   int64(len(shows)) - liked - disliked,
+		Unrated:   int64(len(shows)) - favourite - liked - disliked,
 		Filter:    filter,
 		Search:    r.URL.Query().Get("q"),
 		ShowCount: len(shows),

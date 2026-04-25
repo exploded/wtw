@@ -32,6 +32,7 @@ DELETE FROM ratings WHERE user_id = ? AND show_id = ?;
 
 -- name: CountRatings :one
 SELECT
+  SUM(CASE WHEN rating='favourite' THEN 1 ELSE 0 END) AS favourite,
   SUM(CASE WHEN rating='liked' THEN 1 ELSE 0 END) AS liked,
   SUM(CASE WHEN rating='disliked' THEN 1 ELSE 0 END) AS disliked,
   COUNT(*) AS total
@@ -67,9 +68,14 @@ LEFT JOIN ratings r ON r.show_id = s.id AND r.user_id = ?
 WHERE r.show_id IS NULL
 ORDER BY s.popularity DESC;
 
+-- name: GetFavouriteShows :many
+SELECT s.* FROM shows s
+JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating = 'favourite'
+ORDER BY r.rated_at DESC;
+
 -- name: GetLikedShows :many
 SELECT s.* FROM shows s
-JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating = 'liked'
+JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating IN ('liked', 'favourite')
 ORDER BY r.rated_at DESC;
 
 -- name: GetDislikedShows :many
@@ -132,6 +138,6 @@ ON CONFLICT(partnership_id) DO UPDATE SET
 
 -- name: GetBothLikedShows :many
 SELECT s.* FROM shows s
-JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating = 'liked'
-JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating = 'liked'
+JOIN ratings r1 ON r1.show_id = s.id AND r1.user_id = ? AND r1.rating IN ('liked', 'favourite')
+JOIN ratings r2 ON r2.show_id = s.id AND r2.user_id = ? AND r2.rating IN ('liked', 'favourite')
 ORDER BY s.popularity DESC;

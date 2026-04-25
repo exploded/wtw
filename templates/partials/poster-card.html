@@ -3,8 +3,16 @@
   <div class="poster-card__poster">
     <img alt="{{.Show.Title}}" loading="lazy" src="https://image.tmdb.org/t/p/w500{{.Show.PosterPath.String}}">
     <div class="poster-card__poster-fb"><span>{{.Show.Title}}</span></div>
-    <div class="poster-card__badge">{{if eq .Rating "liked"}}&#x2713;{{else if eq .Rating "disliked"}}&#x00d7;{{else if eq .Rating "unseen"}}&#x2014;{{end}}</div>
+    <div class="poster-card__badge">{{if eq .Rating "favourite"}}&#x2605;{{else if eq .Rating "liked"}}&#x2713;{{else if eq .Rating "disliked"}}&#x00d7;{{else if eq .Rating "unseen"}}&#x2014;{{end}}</div>
     <div class="poster-card__rate" role="group">
+      <button class="rate-btn rate-btn--favourite{{if eq .Rating "favourite"}} is-active{{end}}"
+              hx-post="/ratings/{{.Show.ID}}"
+              hx-vals='{"rating":"favourite"}'
+              hx-target="closest .poster-card"
+              hx-swap="outerHTML"
+              title="Favourite">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </button>
       <button class="rate-btn rate-btn--liked{{if eq .Rating "liked"}} is-active{{end}}"
               hx-post="/ratings/{{.Show.ID}}"
               hx-vals='{"rating":"liked"}'

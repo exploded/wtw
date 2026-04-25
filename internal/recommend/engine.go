@@ -65,6 +65,8 @@ func (e *Engine) ScoreShows(ctx context.Context, userID int64) ([]ScoredShow, er
 		gv := genreVector(r.Genre.String)
 		weight := 0.0
 		switch r.Rating {
+		case "favourite":
+			weight = 2.0
 		case "liked":
 			weight = 1.0
 		case "disliked":
@@ -207,6 +209,7 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		return e.fallbackVerdict(ctx, userID)
 	}
 
+	favourites, _ := e.queries.GetFavouriteShows(ctx, userID)
 	liked, err := e.queries.GetLikedShows(ctx, userID)
 	if err != nil || len(liked) == 0 {
 		return e.fallbackVerdict(ctx, userID)
@@ -218,16 +221,17 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		return e.fallbackVerdict(ctx, userID)
 	}
 
+	favouriteTitles := titlesStr(favourites)
 	likedTitles := titlesStr(liked)
 	dislikedTitles := titlesStr(disliked)
 	candidateTitles := titlesStr(top)
 
 	prompt := fmt.Sprintf(
-		"You are an opinionated cinephile recommending TV series. The user liked: %s. They disliked: %s. "+
+		"You are an opinionated cinephile recommending TV series. The user's absolute favourites: %s. They also liked: %s. They disliked: %s. "+
 			"Recommend exactly ONE TV series from this candidate list: %s. "+
 			"Respond with valid JSON only, no markdown: "+
 			`{"pick":"<exact title>","headline":"You should watch <Title>.","verdict":"<2 sentences, max 50 words, in the voice of a knowledgeable film-friend explaining why>"}`,
-		likedTitles, dislikedTitles, candidateTitles,
+		favouriteTitles, likedTitles, dislikedTitles, candidateTitles,
 	)
 
 	body := map[string]interface{}{
@@ -345,7 +349,9 @@ func (e *Engine) ScoreShowsTogether(ctx context.Context, userA, userB int64) ([]
 	for _, r := range ratingsA {
 		gv := genreVector(r.Genre.String)
 		weight := 0.0
-		if r.Rating == "liked" {
+		if r.Rating == "favourite" {
+			weight = 2.0
+		} else if r.Rating == "liked" {
 			weight = 1.0
 		} else if r.Rating == "disliked" {
 			weight = -1.0
@@ -358,7 +364,9 @@ func (e *Engine) ScoreShowsTogether(ctx context.Context, userA, userB int64) ([]
 	for _, r := range ratingsB {
 		gv := genreVector(r.Genre.String)
 		weight := 0.0
-		if r.Rating == "liked" {
+		if r.Rating == "favourite" {
+			weight = 2.0
+		} else if r.Rating == "liked" {
 			weight = 1.0
 		} else if r.Rating == "disliked" {
 			weight = -1.0
@@ -498,8 +506,10 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}
 
+	favouritesA, _ := e.queries.GetFavouriteShows(ctx, userA)
 	likedA, _ := e.queries.GetLikedShows(ctx, userA)
 	dislikedA, _ := e.queries.GetDislikedShows(ctx, userA)
+	favouritesB, _ := e.queries.GetFavouriteShows(ctx, userB)
 	likedB, _ := e.queries.GetLikedShows(ctx, userB)
 	dislikedB, _ := e.queries.GetDislikedShows(ctx, userB)
 
@@ -510,13 +520,13 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 
 	prompt := fmt.Sprintf(
 		"You are an opinionated cinephile recommending a TV series for two people to watch together. "+
-			"Person A liked: %s. Person A disliked: %s. "+
-			"Person B liked: %s. Person B disliked: %s. "+
+			"Person A's favourites: %s. Person A also liked: %s. Person A disliked: %s. "+
+			"Person B's favourites: %s. Person B also liked: %s. Person B disliked: %s. "+
 			"Recommend exactly ONE series from this candidate list that they would BOTH enjoy: %s. "+
 			"Respond with valid JSON only, no markdown: "+
 			`{"pick":"<exact title>","headline":"Tonight, watch <Title> together.","verdict":"<2 sentences, max 50 words, explaining why this works for both>"}`,
-		titlesStr(likedA), titlesStr(dislikedA),
-		titlesStr(likedB), titlesStr(dislikedB),
+		titlesStr(favouritesA), titlesStr(likedA), titlesStr(dislikedA),
+		titlesStr(favouritesB), titlesStr(likedB), titlesStr(dislikedB),
 		titlesStr(top),
 	)
 
