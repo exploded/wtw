@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -130,6 +131,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Migrate ratings CHECK constraint to include 'favourite'
+	if err := migrateRatingsConstraint(database); err != nil {
+		slog.Error("failed to migrate ratings constraint", "error", err)
+		os.Exit(1)
+	}
+
 	// Seed shows
 	if err := db.SeedAllShows(database); err != nil {
 		slog.Error("failed to seed shows", "error", err)
@@ -231,6 +238,34 @@ func main() {
 		slog.Error("server forced to shutdown", "error", err)
 	}
 	slog.Info("server exited")
+}
+
+// migrateRatingsConstraint recreates the ratings table if the CHECK constraint
+// does not include 'favourite'. Needed because CREATE TABLE IF NOT EXISTS skips
+// existing tables, so the schema update alone cannot fix old databases.
+func migrateRatingsConstraint(db *sql.DB) error {
+	var tableSql string
+	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='ratings'").Scan(&tableSql)
+	if err != nil {
+		return nil // table doesn't exist yet, schema will create it
+	}
+	if strings.Contains(tableSql, "'favourite'") {
+		return nil // already migrated
+	}
+	_, err = db.Exec(`
+		CREATE TABLE ratings_new (
+			user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			show_id   TEXT    NOT NULL REFERENCES shows(id),
+			rating    TEXT    NOT NULL CHECK (rating IN ('favourite','liked','disliked','unseen')),
+			rated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (user_id, show_id)
+		);
+		INSERT INTO ratings_new SELECT * FROM ratings;
+		DROP TABLE ratings;
+		ALTER TABLE ratings_new RENAME TO ratings;
+		CREATE INDEX IF NOT EXISTS idx_ratings_user ON ratings(user_id);
+	`)
+	return err
 }
 
 func cacheStaticAssets(next http.Handler) http.Handler {

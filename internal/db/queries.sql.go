@@ -427,7 +427,7 @@ func (q *Queries) GetIncomingPartnerRequests(ctx context.Context, partnerEmail s
 const getLikedShows = `-- name: GetLikedShows :many
 SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
 JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating IN ('liked', 'favourite')
-ORDER BY r.rated_at DESC
+ORDER BY CASE WHEN r.rating = 'favourite' THEN 0 ELSE 1 END, r.rated_at DESC
 `
 
 func (q *Queries) GetLikedShows(ctx context.Context, userID int64) ([]Show, error) {

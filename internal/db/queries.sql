@@ -79,7 +79,7 @@ ORDER BY r.rated_at DESC;
 -- name: GetLikedShows :many
 SELECT s.* FROM shows s
 JOIN ratings r ON r.show_id = s.id AND r.user_id = ? AND r.rating IN ('liked', 'favourite')
-ORDER BY r.rated_at DESC;
+ORDER BY CASE WHEN r.rating = 'favourite' THEN 0 ELSE 1 END, r.rated_at DESC;
 
 -- name: GetDislikedShows :many
 SELECT s.* FROM shows s
