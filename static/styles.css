@@ -462,6 +462,7 @@ em { font-style: italic; }
 
 .onboard__cta {
   margin-top: 48px;
+  margin-bottom: 32px;
   display: flex;
   gap: 18px;
   align-items: center;
