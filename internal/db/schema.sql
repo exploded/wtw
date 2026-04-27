@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS partner_verdicts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ratings_user ON ratings(user_id);
+CREATE INDEX IF NOT EXISTS idx_ratings_show ON ratings(show_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_partnerships_user ON partnerships(user_id);
 CREATE INDEX IF NOT EXISTS idx_partnerships_email ON partnerships(partner_email);
+CREATE INDEX IF NOT EXISTS idx_partnerships_partner ON partnerships(partner_id);

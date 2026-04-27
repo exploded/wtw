@@ -38,25 +38,29 @@ type visitor struct {
 }
 
 func newRateLimiter(rate int, window time.Duration) *rateLimiter {
-	rl := &rateLimiter{
+	return &rateLimiter{
 		visitors: make(map[string]*visitor),
 		rate:     rate,
 		window:   window,
 	}
-	go rl.cleanup()
-	return rl
 }
 
-func (rl *rateLimiter) cleanup() {
+func (rl *rateLimiter) cleanup(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
 	for {
-		time.Sleep(time.Minute)
-		rl.mu.Lock()
-		for ip, v := range rl.visitors {
-			if time.Since(v.windowStart) > rl.window {
-				delete(rl.visitors, ip)
+		select {
+		case <-ticker.C:
+			rl.mu.Lock()
+			for ip, v := range rl.visitors {
+				if time.Since(v.windowStart) > rl.window {
+					delete(rl.visitors, ip)
+				}
 			}
+			rl.mu.Unlock()
+		case <-ctx.Done():
+			return
 		}
-		rl.mu.Unlock()
 	}
 }
 
@@ -76,12 +80,27 @@ func (rl *rateLimiter) allow(ip string) bool {
 	return v.count <= rl.rate
 }
 
+// clientIP extracts the client IP, preferring X-Forwarded-For behind a proxy.
+func clientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// First entry is the original client
+		if ip := strings.TrimSpace(strings.SplitN(xff, ",", 2)[0]); ip != "" {
+			return ip
+		}
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
+}
+
 func rateLimitMiddleware(limiter *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			ip = r.RemoteAddr
-		}
+		ip := clientIP(r)
 		if !limiter.allow(ip) {
 			slog.Warn("rate limit exceeded", "ip", ip)
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
@@ -145,9 +164,13 @@ func main() {
 
 	queries := db.New(database)
 
+	// Cancellable context for background goroutines
+	bgCtx, bgCancel := context.WithCancel(context.Background())
+	defer bgCancel()
+
 	// Session store
 	store := session.NewStore(queries)
-	go store.CleanupLoop()
+	go store.CleanupLoop(bgCtx)
 
 	// Auth handler
 	authHandler := auth.NewHandler(
@@ -156,17 +179,22 @@ func main() {
 		os.Getenv("GOOGLE_REDIRECT_URL"),
 		queries,
 		store,
+		isProd,
 	)
 
-	// TMDB client — refresh poster paths in background
+	// TMDB client -- refresh poster paths in background
 	tmdbClient := tmdb.NewClient(os.Getenv("TMDB_API_KEY"), queries)
-	tmdbClient.StartRefreshLoop(context.Background())
+	tmdbClient.StartRefreshLoop(bgCtx)
 
 	// Recommendation engine
 	engine := recommend.NewEngine(queries, os.Getenv("ANTHROPIC_API_KEY"), tmdbClient)
 
 	// Handlers
 	h := handlers.New(queries, store, engine, tmdbClient)
+
+	// Rate limiter with cancellable cleanup
+	limiter := newRateLimiter(60, time.Minute)
+	go limiter.cleanup(bgCtx)
 
 	// Routes
 	mux := http.NewServeMux()
@@ -207,7 +235,6 @@ func main() {
 	})
 
 	// Middleware chain
-	limiter := newRateLimiter(60, time.Minute)
 	handler := middleware.RequestLogger(
 		rateLimitMiddleware(limiter,
 			middleware.SecurityHeaders(isProd, mux),
@@ -222,18 +249,27 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Use a channel to propagate server errors to main goroutine
+	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("HTTP server listening", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "error", err)
-			os.Exit(1)
+			serverErr <- err
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	slog.Info("shutting down server...")
+
+	select {
+	case <-quit:
+		slog.Info("shutting down server...")
+	case err := <-serverErr:
+		slog.Error("server error", "error", err)
+	}
+
+	// Cancel background goroutines before shutting down the server
+	bgCancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -246,16 +282,21 @@ func main() {
 // migrateRatingsConstraint recreates the ratings table if the CHECK constraint
 // does not include 'favourite'. Needed because CREATE TABLE IF NOT EXISTS skips
 // existing tables, so the schema update alone cannot fix old databases.
-func migrateRatingsConstraint(db *sql.DB) error {
+func migrateRatingsConstraint(database *sql.DB) error {
 	var tableSql string
-	err := db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='ratings'").Scan(&tableSql)
+	err := database.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='ratings'").Scan(&tableSql)
 	if err != nil {
 		return nil // table doesn't exist yet, schema will create it
 	}
 	if strings.Contains(tableSql, "'favourite'") {
 		return nil // already migrated
 	}
-	_, err = db.Exec(`
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`
 		CREATE TABLE ratings_new (
 			user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			show_id   TEXT    NOT NULL REFERENCES shows(id),
@@ -268,7 +309,10 @@ func migrateRatingsConstraint(db *sql.DB) error {
 		ALTER TABLE ratings_new RENAME TO ratings;
 		CREATE INDEX IF NOT EXISTS idx_ratings_user ON ratings(user_id);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func cacheStaticAssets(next http.Handler) http.Handler {

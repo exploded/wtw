@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"wtw/internal/db"
 	"wtw/internal/middleware"
 	"wtw/internal/tmdb"
 )
@@ -24,41 +26,29 @@ type CatalogData struct {
 
 func (h *Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	shows, _ := h.queries.GetShows(r.Context())
-	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	shows, err := h.queries.GetShows(r.Context())
+	if err != nil {
+		slog.Error("failed to get shows", "error", err)
+	}
+	ratings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
 
 	ratingMap := make(map[string]string)
 	for _, rating := range ratings {
 		ratingMap[rating.ShowID] = rating.Rating
 	}
 
-	counts, _ := h.queries.CountRatings(r.Context(), userID)
+	counts, err := h.queries.CountRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to count ratings", "error", err)
+	}
 
 	filter := r.URL.Query().Get("filter")
 	search := strings.ToLower(r.URL.Query().Get("q"))
 
-	var filtered []ShowWithRating
-	for _, show := range shows {
-		rating := ratingMap[show.ID]
-		swr := ShowWithRating{Show: show, Rating: rating}
-
-		// Apply filter
-		if filter != "" && filter != "all" {
-			if filter == "unrated" && rating != "" {
-				continue
-			}
-			if filter != "unrated" && rating != filter {
-				continue
-			}
-		}
-
-		// Apply search
-		if search != "" && !strings.Contains(strings.ToLower(show.Title), search) {
-			continue
-		}
-
-		filtered = append(filtered, swr)
-	}
+	filtered := filterShows(shows, ratingMap, filter, search)
 
 	favourite := int64(counts.Favourite.Float64)
 	liked := int64(counts.Liked.Float64)
@@ -85,8 +75,14 @@ func (h *Handler) Catalog(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CatalogFilter(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	shows, _ := h.queries.GetShows(r.Context())
-	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	shows, err := h.queries.GetShows(r.Context())
+	if err != nil {
+		slog.Error("failed to get shows", "error", err)
+	}
+	ratings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
 
 	ratingMap := make(map[string]string)
 	for _, rating := range ratings {
@@ -96,6 +92,11 @@ func (h *Handler) CatalogFilter(w http.ResponseWriter, r *http.Request) {
 	filter := r.URL.Query().Get("filter")
 	search := strings.ToLower(r.URL.Query().Get("q"))
 
+	filtered := filterShows(shows, ratingMap, filter, search)
+	renderPartial(w, "poster-grid", filtered)
+}
+
+func filterShows(shows []db.Show, ratingMap map[string]string, filter, search string) []ShowWithRating {
 	var filtered []ShowWithRating
 	for _, show := range shows {
 		rating := ratingMap[show.ID]
@@ -115,8 +116,7 @@ func (h *Handler) CatalogFilter(w http.ResponseWriter, r *http.Request) {
 
 		filtered = append(filtered, ShowWithRating{Show: show, Rating: rating})
 	}
-
-	renderPartial(w, "poster-grid", filtered)
+	return filtered
 }
 
 type TMDBSearchResult struct {
@@ -133,6 +133,7 @@ func (h *Handler) CatalogSearchTMDB(w http.ResponseWriter, r *http.Request) {
 
 	results, err := h.tmdbClient.SearchTVMulti(r.Context(), query)
 	if err != nil {
+		slog.Error("TMDB search failed", "error", err)
 		renderPartial(w, "tmdb-results", []TMDBSearchResult{})
 		return
 	}

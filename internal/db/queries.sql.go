@@ -578,11 +578,11 @@ func (q *Queries) GetShowByID(ctx context.Context, id string) (Show, error) {
 }
 
 const getShowByTitle = `-- name: GetShowByTitle :one
-SELECT id, tmdb_id, title, year, poster_path, genre, synopsis, popularity, cached_at FROM shows WHERE LOWER(title) = LOWER(?) LIMIT 1
+SELECT id, tmdb_id, title, year, poster_path, genre, synopsis, popularity, cached_at FROM shows WHERE title = ? COLLATE NOCASE LIMIT 1
 `
 
-func (q *Queries) GetShowByTitle(ctx context.Context, lower string) (Show, error) {
-	row := q.db.QueryRowContext(ctx, getShowByTitle, lower)
+func (q *Queries) GetShowByTitle(ctx context.Context, title string) (Show, error) {
+	row := q.db.QueryRowContext(ctx, getShowByTitle, title)
 	var i Show
 	err := row.Scan(
 		&i.ID,

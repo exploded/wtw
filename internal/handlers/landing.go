@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 
 	"wtw/internal/db"
@@ -18,7 +19,10 @@ func (h *Handler) Landing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get shows for the decorative poster wall
-	shows, _ := h.queries.GetShows(r.Context())
+	shows, err := h.queries.GetShows(r.Context())
+	if err != nil {
+		slog.Error("failed to get shows for landing", "error", err)
+	}
 
 	data := struct {
 		Shows []db.Show

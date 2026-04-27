@@ -1061,7 +1061,7 @@ em { font-style: italic; }
 
 /* Toggle switch */
 .toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex: none; }
-.toggle input { display: none; }
+.toggle input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 .toggle span {
   position: absolute;
   inset: 0;
@@ -1259,4 +1259,18 @@ em { font-style: italic; }
   padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
+}
+
+/* Focus-visible styles for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.btn:focus-visible, .tab:focus-visible, .avatar:focus-visible, .rate-btn:focus-visible, .filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input:focus-visible, .partner-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
 }

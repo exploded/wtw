@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -38,6 +39,12 @@ func loadTemplates() {
 				}
 			}
 			return result
+		},
+		"progressPct": func(rated, total int) int {
+			if total == 0 {
+				return 0
+			}
+			return (rated * 100) / total
 		},
 	}
 
@@ -97,36 +104,45 @@ func New(queries *db.Queries, store *session.Store, engine *recommend.Engine, tm
 }
 
 func renderPage(w http.ResponseWriter, name string, data interface{}) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	t, ok := pageTemplates[name]
 	if !ok {
 		slog.Error("template not found", "template", name)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	if err := t.ExecuteTemplate(w, "layout", data); err != nil {
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
 		slog.Error("template render error", "template", name, "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
 }
 
 func renderPartial(w http.ResponseWriter, name string, data interface{}) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	var buf bytes.Buffer
 	// Try page templates first (for content blocks like "recs-content")
 	for _, t := range pageTemplates {
 		if tmpl := t.Lookup(name); tmpl != nil {
-			if err := tmpl.Execute(w, data); err != nil {
+			if err := tmpl.Execute(&buf, data); err != nil {
 				slog.Error("partial render error", "template", name, "error", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
 			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			buf.WriteTo(w)
 			return
 		}
 	}
 	// Fallback to partials
-	if err := partialTmpl.ExecuteTemplate(w, name, data); err != nil {
+	if err := partialTmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		slog.Error("partial render error", "template", name, "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
 }
 
 func isHTMX(r *http.Request) bool {
@@ -173,7 +189,10 @@ func (h *Handler) basePageDataWithPartners(r *http.Request, activeTab string) Pa
 	}
 
 	// Load active partnerships (as owner)
-	owned, _ := h.queries.GetActivePartnershipsAsOwner(r.Context(), userID)
+	owned, err := h.queries.GetActivePartnershipsAsOwner(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get owned partnerships for appbar", "error", err)
+	}
 	for _, p := range owned {
 		pd.Partners = append(pd.Partners, PartnerInfo{
 			PartnershipID:   p.ID,
@@ -183,7 +202,10 @@ func (h *Handler) basePageDataWithPartners(r *http.Request, activeTab string) Pa
 	}
 
 	// Load active partnerships (as partner)
-	asPartner, _ := h.queries.GetActivePartnershipsAsPartner(r.Context(), db.NewNullInt64(userID))
+	asPartner, err := h.queries.GetActivePartnershipsAsPartner(r.Context(), db.NewNullInt64(userID))
+	if err != nil {
+		slog.Error("failed to get partner partnerships for appbar", "error", err)
+	}
 	for _, p := range asPartner {
 		pd.Partners = append(pd.Partners, PartnerInfo{
 			PartnershipID:   p.ID,

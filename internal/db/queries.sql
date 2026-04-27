@@ -156,7 +156,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 SELECT * FROM shows WHERE tmdb_id = ?;
 
 -- name: GetShowByTitle :one
-SELECT * FROM shows WHERE LOWER(title) = LOWER(?) LIMIT 1;
+SELECT * FROM shows WHERE title = ? COLLATE NOCASE LIMIT 1;
 
 -- name: CountShows :one
 SELECT COUNT(*) FROM shows;

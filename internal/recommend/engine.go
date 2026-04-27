@@ -3,16 +3,23 @@ package recommend
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
+	"time"
 
 	"wtw/internal/db"
 	"wtw/internal/tmdb"
 )
+
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 type Engine struct {
 	queries      *db.Queries
@@ -86,7 +93,7 @@ func (e *Engine) ScoreShows(ctx context.Context, userID int64) ([]ScoredShow, er
 		return nil, err
 	}
 
-	var scored []ScoredShow
+	scored := make([]ScoredShow, 0, len(unrated))
 	for _, show := range unrated {
 		gv := genreVector(show.Genre.String)
 		score := 0.0
@@ -98,14 +105,9 @@ func (e *Engine) ScoreShows(ctx context.Context, userID int64) ([]ScoredShow, er
 		scored = append(scored, ScoredShow{Show: show, Score: score})
 	}
 
-	// Sort by score descending
-	for i := 0; i < len(scored); i++ {
-		for j := i + 1; j < len(scored); j++ {
-			if scored[j].Score > scored[i].Score {
-				scored[i], scored[j] = scored[j], scored[i]
-			}
-		}
-	}
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].Score > scored[j].Score
+	})
 
 	return scored, nil
 }
@@ -202,6 +204,9 @@ func (e *Engine) GetVerdict(ctx context.Context, userID int64) (*Verdict, error)
 			Show:     &show,
 		}, nil
 	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("unexpected error checking verdict cache", "error", err)
+	}
 
 	// Generate new verdict
 	return e.generateVerdict(ctx, userID)
@@ -212,19 +217,28 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		return e.fallbackVerdict(ctx, userID)
 	}
 
-	favourites, _ := e.queries.GetFavouriteShows(ctx, userID)
+	favourites, err := e.queries.GetFavouriteShows(ctx, userID)
+	if err != nil {
+		slog.Error("failed to get favourite shows", "error", err)
+	}
 	liked, err := e.queries.GetLikedShows(ctx, userID)
 	if err != nil || len(liked) == 0 {
 		return e.fallbackVerdict(ctx, userID)
 	}
-	disliked, _ := e.queries.GetDislikedShows(ctx, userID)
+	disliked, err := e.queries.GetDislikedShows(ctx, userID)
+	if err != nil {
+		slog.Error("failed to get disliked shows", "error", err)
+	}
 
 	favouriteTitles := titlesStr(favourites)
 	likedTitles := titlesStr(liked)
 	dislikedTitles := titlesStr(disliked)
 
 	// Build a list of already-rated titles so the AI avoids them
-	allRated := append(append(favourites, liked...), disliked...)
+	allRated := make([]db.Show, 0, len(favourites)+len(liked)+len(disliked))
+	allRated = append(allRated, favourites...)
+	allRated = append(allRated, liked...)
+	allRated = append(allRated, disliked...)
 	ratedTitles := titlesStr(allRated)
 
 	prompt := fmt.Sprintf(
@@ -250,7 +264,7 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 	req.Header.Set("x-api-key", e.anthropicKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		slog.Error("claude api error", "error", err)
 		return e.fallbackVerdict(ctx, userID)
@@ -267,7 +281,7 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 			Text string `json:"text"`
 		} `json:"content"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
 		return e.fallbackVerdict(ctx, userID)
 	}
 
@@ -443,14 +457,9 @@ func (e *Engine) ScoreShowsTogether(ctx context.Context, userA, userB int64) ([]
 		scored = append(scored, ScoredShow{Show: show, Score: score})
 	}
 
-	// Sort descending
-	for i := 0; i < len(scored); i++ {
-		for j := i + 1; j < len(scored); j++ {
-			if scored[j].Score > scored[i].Score {
-				scored[i], scored[j] = scored[j], scored[i]
-			}
-		}
-	}
+	sort.Slice(scored, func(i, j int) bool {
+		return scored[i].Score > scored[j].Score
+	})
 
 	return scored, nil
 }
@@ -509,6 +518,9 @@ func (e *Engine) GetTogetherVerdict(ctx context.Context, partnershipID, userA, u
 			Show:     &show,
 		}, nil
 	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("unexpected error checking together verdict cache", "error", err)
+	}
 
 	return e.generateTogetherVerdict(ctx, partnershipID, userA, userB)
 }
@@ -518,16 +530,39 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}
 
-	favouritesA, _ := e.queries.GetFavouriteShows(ctx, userA)
-	likedA, _ := e.queries.GetLikedShows(ctx, userA)
-	dislikedA, _ := e.queries.GetDislikedShows(ctx, userA)
-	favouritesB, _ := e.queries.GetFavouriteShows(ctx, userB)
-	likedB, _ := e.queries.GetLikedShows(ctx, userB)
-	dislikedB, _ := e.queries.GetDislikedShows(ctx, userB)
+	favouritesA, err := e.queries.GetFavouriteShows(ctx, userA)
+	if err != nil {
+		slog.Error("failed to get favourites for user A", "error", err)
+	}
+	likedA, err := e.queries.GetLikedShows(ctx, userA)
+	if err != nil {
+		slog.Error("failed to get liked for user A", "error", err)
+	}
+	dislikedA, err := e.queries.GetDislikedShows(ctx, userA)
+	if err != nil {
+		slog.Error("failed to get disliked for user A", "error", err)
+	}
+	favouritesB, err := e.queries.GetFavouriteShows(ctx, userB)
+	if err != nil {
+		slog.Error("failed to get favourites for user B", "error", err)
+	}
+	likedB, err := e.queries.GetLikedShows(ctx, userB)
+	if err != nil {
+		slog.Error("failed to get liked for user B", "error", err)
+	}
+	dislikedB, err := e.queries.GetDislikedShows(ctx, userB)
+	if err != nil {
+		slog.Error("failed to get disliked for user B", "error", err)
+	}
 
 	// Build list of already-rated titles for both users
-	allRated := append(append(append(favouritesA, likedA...), dislikedA...), favouritesB...)
-	allRated = append(append(allRated, likedB...), dislikedB...)
+	allRated := make([]db.Show, 0, len(favouritesA)+len(likedA)+len(dislikedA)+len(favouritesB)+len(likedB)+len(dislikedB))
+	allRated = append(allRated, favouritesA...)
+	allRated = append(allRated, likedA...)
+	allRated = append(allRated, dislikedA...)
+	allRated = append(allRated, favouritesB...)
+	allRated = append(allRated, likedB...)
+	allRated = append(allRated, dislikedB...)
 	ratedTitles := titlesStr(allRated)
 
 	prompt := fmt.Sprintf(
@@ -557,7 +592,7 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 	req.Header.Set("x-api-key", e.anthropicKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		slog.Error("claude api error (together)", "error", err)
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
@@ -574,7 +609,7 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 			Text string `json:"text"`
 		} `json:"content"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}
 

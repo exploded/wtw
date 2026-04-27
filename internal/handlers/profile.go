@@ -3,6 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"html"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -149,21 +151,36 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	userEmail := middleware.GetUserEmail(r.Context())
 
-	counts, _ := h.queries.CountRatings(r.Context(), userID)
+	counts, err := h.queries.CountRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to count ratings", "error", err)
+	}
 	favourite := int64(counts.Favourite.Float64)
 	liked := int64(counts.Liked.Float64)
 	disliked := int64(counts.Disliked.Float64)
 
-	likedShows, _ := h.queries.GetLikedShows(r.Context(), userID)
-	shows, _ := h.queries.GetShows(r.Context())
+	likedShows, err := h.queries.GetLikedShows(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get liked shows", "error", err)
+	}
+	shows, err := h.queries.GetShows(r.Context())
+	if err != nil {
+		slog.Error("failed to get shows", "error", err)
+	}
 
 	topShows := likedShows
 	if len(topShows) > 5 {
 		topShows = topShows[:5]
 	}
 
-	user, _ := h.queries.GetUserByID(r.Context(), userID)
-	ratingsWithShows, _ := h.queries.GetUserRatingsWithShows(r.Context(), userID)
+	user, err := h.queries.GetUserByID(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user", "error", err)
+	}
+	ratingsWithShows, err := h.queries.GetUserRatingsWithShows(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get ratings with shows", "error", err)
+	}
 
 	data := ProfileData{
 		PageData:     h.basePageDataWithPartners(r, "profile"),
@@ -180,7 +197,10 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 
 	// Active partnerships (as owner)
 	seen := map[string]bool{}
-	owned, _ := h.queries.GetActivePartnershipsAsOwner(r.Context(), userID)
+	owned, err := h.queries.GetActivePartnershipsAsOwner(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get owned partnerships", "error", err)
+	}
 	for _, p := range owned {
 		seen[p.PartnerEmail] = true
 		data.ActivePartners = append(data.ActivePartners, ActivePartner{
@@ -192,7 +212,10 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Active partnerships (as partner) - skip if already seen from owned
-	asPartner, _ := h.queries.GetActivePartnershipsAsPartner(r.Context(), db.NewNullInt64(userID))
+	asPartner, err := h.queries.GetActivePartnershipsAsPartner(r.Context(), db.NewNullInt64(userID))
+	if err != nil {
+		slog.Error("failed to get partner partnerships", "error", err)
+	}
 	for _, p := range asPartner {
 		if seen[p.PartnerEmail] {
 			continue
@@ -206,7 +229,10 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Pending (sent by me)
-	pending, _ := h.queries.GetPendingPartnershipsByUser(r.Context(), userID)
+	pending, err := h.queries.GetPendingPartnershipsByUser(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get pending partnerships", "error", err)
+	}
 	for _, p := range pending {
 		data.PendingPartners = append(data.PendingPartners, PendingPartner{
 			PartnershipID: p.ID,
@@ -215,7 +241,10 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Incoming requests (others who added my email)
-	incoming, _ := h.queries.GetIncomingPartnerRequests(r.Context(), userEmail)
+	incoming, err := h.queries.GetIncomingPartnerRequests(r.Context(), userEmail)
+	if err != nil {
+		slog.Error("failed to get incoming requests", "error", err)
+	}
 	for _, p := range incoming {
 		data.IncomingRequests = append(data.IncomingRequests, IncomingRequest{
 			PartnershipID: p.ID,
@@ -300,23 +329,34 @@ func (h *Handler) AddPartner(w http.ResponseWriter, r *http.Request) {
 						})
 					}
 				}
-				h.profileWithSuccess(w, r, fmt.Sprintf("Linked with %s!", partnerUser.Name))
+				h.profileWithSuccess(w, r, fmt.Sprintf("Linked with %s!", html.EscapeString(partnerUser.Name)))
 				return
 			}
 		}
 	}
 
-	h.profileWithSuccess(w, r, fmt.Sprintf("Invite sent to %s. They'll need to add your email too.", partnerEmail))
+	h.profileWithSuccess(w, r, fmt.Sprintf("Invite sent to %s. They'll need to add your email too.", html.EscapeString(partnerEmail)))
 }
 
 func (h *Handler) AcceptPartner(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
+	userEmail := middleware.GetUserEmail(r.Context())
 	idStr := r.PathValue("id")
-	partnershipID, _ := strconv.ParseInt(idStr, 10, 64)
+	partnershipID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
 
 	partnership, err := h.queries.GetPartnershipByID(r.Context(), partnershipID)
 	if err != nil {
 		h.profileWithError(w, r, "Partnership not found.")
+		return
+	}
+
+	// Authorization: only the intended partner can accept
+	if !strings.EqualFold(partnership.PartnerEmail, userEmail) {
+		h.profileWithError(w, r, "You are not authorized to accept this partnership.")
 		return
 	}
 
@@ -326,10 +366,18 @@ func (h *Handler) AcceptPartner(w http.ResponseWriter, r *http.Request) {
 		ID:        partnershipID,
 	})
 
+	// Look up the requester's email for the reverse partnership
+	requester, err := h.queries.GetUserByID(r.Context(), partnership.UserID)
+	if err != nil {
+		slog.Error("failed to look up requester for reverse partnership", "error", err)
+		h.profileWithSuccess(w, r, "Partnership accepted!")
+		return
+	}
+
 	// Create our side of the partnership too (active immediately)
 	_, _ = h.queries.CreatePartnership(r.Context(), db.CreatePartnershipParams{
 		UserID:       userID,
-		PartnerEmail: partnership.PartnerEmail,
+		PartnerEmail: requester.Email,
 		PartnerID:    sql.NullInt64{Int64: partnership.UserID, Valid: true},
 		Status:       "active",
 	})
@@ -338,8 +386,24 @@ func (h *Handler) AcceptPartner(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RemovePartner(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
 	idStr := r.PathValue("id")
-	partnershipID, _ := strconv.ParseInt(idStr, 10, 64)
+	partnershipID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	// Authorization: only a party to the partnership can remove it
+	partnership, err := h.queries.GetPartnershipByID(r.Context(), partnershipID)
+	if err != nil {
+		http.Error(w, "partnership not found", http.StatusNotFound)
+		return
+	}
+	if partnership.UserID != userID && (!partnership.PartnerID.Valid || partnership.PartnerID.Int64 != userID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	_ = h.queries.DeletePartnership(r.Context(), partnershipID)
 
@@ -354,10 +418,10 @@ func (h *Handler) RemovePartner(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) profileWithError(w http.ResponseWriter, r *http.Request, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<p class="partner-msg partner-msg--error">%s</p>`, msg)
+	fmt.Fprintf(w, `<p class="partner-msg partner-msg--error">%s</p>`, html.EscapeString(msg))
 }
 
 func (h *Handler) profileWithSuccess(w http.ResponseWriter, r *http.Request, msg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<p class="partner-msg partner-msg--ok">%s</p>`, msg)
+	fmt.Fprintf(w, `<p class="partner-msg partner-msg--ok">%s</p>`, html.EscapeString(msg))
 }

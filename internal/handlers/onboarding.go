@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 
 	"wtw/internal/middleware"
@@ -10,12 +11,19 @@ type OnboardingData struct {
 	PageData
 	Shows      []ShowWithRating
 	RatedCount int
+	TotalShows int
 }
 
 func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	shows, _ := h.queries.GetTopShows(r.Context(), 20)
-	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	shows, err := h.queries.GetTopShows(r.Context(), 20)
+	if err != nil {
+		slog.Error("failed to get top shows", "error", err)
+	}
+	ratings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
 
 	ratingMap := make(map[string]string)
 	for _, rating := range ratings {
@@ -34,6 +42,7 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 		PageData:   basePageData(r, ""),
 		Shows:      showsWithRatings,
 		RatedCount: len(ratings),
+		TotalShows: len(shows),
 	}
 
 	if isHTMX(r) {

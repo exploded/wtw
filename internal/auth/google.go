@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -19,9 +21,10 @@ type Handler struct {
 	config  *oauth2.Config
 	queries *db.Queries
 	store   *session.Store
+	isProd  bool
 }
 
-func NewHandler(clientID, clientSecret, redirectURL string, queries *db.Queries, store *session.Store) *Handler {
+func NewHandler(clientID, clientSecret, redirectURL string, queries *db.Queries, store *session.Store, isProd bool) *Handler {
 	cfg := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -29,7 +32,7 @@ func NewHandler(clientID, clientSecret, redirectURL string, queries *db.Queries,
 		Scopes:       []string{"openid", "email", "profile"},
 		Endpoint:     google.Endpoint,
 	}
-	return &Handler{config: cfg, queries: queries, store: store}
+	return &Handler{config: cfg, queries: queries, store: store, isProd: isProd}
 }
 
 type googleUserInfo struct {
@@ -40,11 +43,42 @@ type googleUserInfo struct {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	url := h.config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	state := hex.EncodeToString(b)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.isProd,
+	})
+
+	url := h.config.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
 func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
+	// Validate OAuth state
+	stateCookie, err := r.Cookie("oauth_state")
+	if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
+		http.Error(w, "invalid state", http.StatusBadRequest)
+		return
+	}
+	// Clear the state cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:   "oauth_state",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		http.Error(w, "missing code", http.StatusBadRequest)
@@ -99,15 +133,20 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		Name:     "session",
 		Value:    sessionToken,
 		Path:     "/",
-		MaxAge:   30 * 24 * 60 * 60,
+		MaxAge:   session.MaxAgeSec,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
+		Secure:   h.isProd,
 	})
 
 	// Check if user has ratings to decide redirect
 	ratings, err := h.queries.GetUserRatings(r.Context(), user.ID)
-	if err != nil || len(ratings) == 0 {
+	if err != nil {
+		slog.Error("failed to check user ratings", "error", err)
+		http.Redirect(w, r, "/onboarding", http.StatusSeeOther)
+		return
+	}
+	if len(ratings) == 0 {
 		http.Redirect(w, r, "/onboarding", http.StatusSeeOther)
 		return
 	}

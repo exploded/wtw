@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -68,11 +69,17 @@ var SeedShows = []SeedShow{
 }
 
 func SeedAllShows(database *sql.DB) error {
+	queries := New(database)
+	ctx := context.Background()
 	for _, s := range SeedShows {
-		_, err := database.Exec(
-			`INSERT OR IGNORE INTO shows (id, title, year, poster_path, genre, popularity) VALUES (?, ?, ?, ?, ?, ?)`,
-			s.ID, s.Title, s.Year, s.PosterPath, s.Genre, s.Popularity,
-		)
+		err := queries.InsertShow(ctx, InsertShowParams{
+			ID:         s.ID,
+			Title:      s.Title,
+			Year:       s.Year,
+			PosterPath: NewNullString(s.PosterPath),
+			Genre:      NewNullString(s.Genre),
+			Popularity: sql.NullFloat64{Float64: s.Popularity, Valid: true},
+		})
 		if err != nil {
 			return fmt.Errorf("seeding show %s: %w", s.ID, err)
 		}

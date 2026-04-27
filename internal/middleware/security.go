@@ -12,11 +12,11 @@ func SecurityHeaders(isProd bool, next http.Handler) http.Handler {
 		}
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' https://unpkg.com https://static.cloudflareinsights.com; "+
+				"script-src 'self' https://static.cloudflareinsights.com; "+
 				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
 				"font-src 'self' https://fonts.gstatic.com; "+
 				"img-src 'self' https://image.tmdb.org data:; "+
-				"connect-src 'self'")
+				"connect-src 'self' https://cloudflareinsights.com")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -1,11 +1,10 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
-	"strings"
 
 	"wtw/internal/db"
-	"wtw/internal/middleware"
 )
 
 type UsersData struct {
@@ -14,16 +13,20 @@ type UsersData struct {
 }
 
 func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
-	email := middleware.GetUserEmail(r.Context())
-	if !strings.EqualFold(email, adminEmail) {
+	pd := basePageData(r, "users")
+	if !pd.IsAdmin {
 		http.Redirect(w, r, "/recs", http.StatusSeeOther)
 		return
 	}
 
-	users, _ := h.queries.ListUsers(r.Context())
+	users, err := h.queries.ListUsers(r.Context())
+	if err != nil {
+		slog.Error("failed to list users", "error", err)
+		users = []db.ListUsersRow{}
+	}
 
 	data := UsersData{
-		PageData: h.basePageDataWithPartners(r, "users"),
+		PageData: pd,
 		Users:    users,
 	}
 

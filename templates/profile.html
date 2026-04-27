@@ -12,7 +12,7 @@
         <p class="lede lede--tight">{{.UserEmail}}</p>
       </div>
     </div>
-    <button class="btn btn--ghost" hx-post="/auth/logout">Sign out</button>
+    <button class="btn btn--ghost" hx-post="/auth/logout" hx-target="body">Sign out</button>
   </section>
 
   {{if .TopShows}}
@@ -51,6 +51,13 @@
     </section>
     {{end}}
   </div>
+  {{else}}
+  <div class="profile__cols">
+    <section class="taste-card taste-card--wide" style="text-align:center; padding: 48px 24px;">
+      <p class="lede">You haven't rated any shows yet.</p>
+      <a href="/onboarding" class="btn btn--primary" style="margin-top: 16px;">Rate some shows</a>
+    </section>
+  </div>
   {{end}}
 
   <section class="profile__settings">
@@ -70,7 +77,9 @@
         <a href="/together/{{.PartnershipID}}" class="btn btn--ghost btn--sm">Watch together</a>
         <button class="btn btn--ghost btn--sm btn--danger"
                 hx-post="/partners/{{.PartnershipID}}/remove"
-                hx-confirm="Remove this partner?">Remove</button>
+                hx-confirm="Remove this partner?"
+                hx-target="closest .settings-row"
+                hx-swap="outerHTML">Remove</button>
       </div>
     </div>
     {{end}}
@@ -84,7 +93,9 @@
         <p>Waiting for {{.Email}} to accept...</p>
       </div>
       <button class="btn btn--ghost btn--sm btn--danger"
-              hx-post="/partners/{{.PartnershipID}}/remove">Cancel</button>
+              hx-post="/partners/{{.PartnershipID}}/remove"
+              hx-target="closest .settings-row"
+              hx-swap="outerHTML">Cancel</button>
     </div>
     {{end}}
     {{end}}
@@ -98,9 +109,13 @@
       </div>
       <div class="partner-actions">
         <button class="btn btn--primary btn--sm"
-                hx-post="/partners/{{.PartnershipID}}/accept">Accept</button>
+                hx-post="/partners/{{.PartnershipID}}/accept"
+                hx-target="closest .settings-row"
+                hx-swap="outerHTML">Accept</button>
         <button class="btn btn--ghost btn--sm btn--danger"
-                hx-post="/partners/{{.PartnershipID}}/remove">Decline</button>
+                hx-post="/partners/{{.PartnershipID}}/remove"
+                hx-target="closest .settings-row"
+                hx-swap="outerHTML">Decline</button>
       </div>
     </div>
     {{end}}
@@ -112,7 +127,7 @@
         <p>Enter their email to link accounts and get shared recommendations.</p>
       </div>
       <form class="partner-form" hx-post="/partners/add" hx-target="#partnerMsg" hx-swap="innerHTML">
-        <input type="email" name="email" placeholder="partner@example.com" required class="partner-input">
+        <input type="email" name="email" placeholder="partner@example.com" aria-label="Partner email address" required class="partner-input">
         <button type="submit" class="btn btn--primary btn--sm">Link</button>
       </form>
     </div>
@@ -123,10 +138,9 @@
     <h4 class="h-section">Account</h4>
     <div class="settings-row">
       <div>
-        <strong>Reset my taste</strong>
-        <p>Clear all ratings and start over. Cannot be undone.</p>
+        <strong>Member since</strong>
+        <p>{{.MemberSince}}</p>
       </div>
-      <button class="btn btn--ghost btn--danger">Reset</button>
     </div>
   </section>
 

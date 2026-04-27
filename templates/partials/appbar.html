@@ -11,6 +11,6 @@
     <a class="tab{{if eq .ActiveTab "profile"}} tab--active{{end}}" href="/profile" hx-get="/profile" hx-target="#app" hx-push-url="true">Taste</a>
     {{if .IsAdmin}}<a class="tab{{if eq .ActiveTab "users"}} tab--active{{end}}" href="/users" hx-get="/users" hx-target="#app" hx-push-url="true">Users</a>{{end}}
   </nav>
-  <button class="avatar" hx-get="/profile" hx-target="#app" hx-push-url="/profile" title="Profile">{{.UserInitials}}</button>
+  <button class="avatar" hx-get="/profile" hx-target="#app" hx-push-url="/profile" aria-label="Profile" title="Profile">{{.UserInitials}}</button>
 </header>
 {{end}}

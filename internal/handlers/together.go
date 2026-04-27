@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -11,27 +12,37 @@ import (
 
 type TogetherData struct {
 	PageData
-	PartnershipID int64
-	PartnerName   string
+	PartnershipID   int64
+	PartnerName     string
 	PartnerInitials string
-	Verdict       *recommend.Verdict
-	RecsTonight   []ShowWithRating
-	BecauseTitle  string
-	BecauseShows  []ShowWithRating
-	OverlapShows  []db.Show
-	HasEnoughData bool
-	MyRatedCount  int
+	Verdict         *recommend.Verdict
+	RecsTonight     []ShowWithRating
+	BecauseTitle    string
+	BecauseShows    []ShowWithRating
+	OverlapShows    []db.Show
+	HasEnoughData   bool
+	MyRatedCount    int
 	TheirRatedCount int
 }
 
 func (h *Handler) Together(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	idStr := r.PathValue("id")
-	partnershipID, _ := strconv.ParseInt(idStr, 10, 64)
+	partnershipID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
 
 	partnership, err := h.queries.GetPartnershipByID(r.Context(), partnershipID)
 	if err != nil {
 		http.Redirect(w, r, "/recs", http.StatusSeeOther)
+		return
+	}
+
+	// Only allow active partnerships
+	if partnership.Status != "active" {
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
 		return
 	}
 
@@ -56,8 +67,14 @@ func (h *Handler) Together(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	myRatings, _ := h.queries.GetUserRatings(r.Context(), userID)
-	theirRatings, _ := h.queries.GetUserRatings(r.Context(), partnerUserID)
+	myRatings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
+	theirRatings, err := h.queries.GetUserRatings(r.Context(), partnerUserID)
+	if err != nil {
+		slog.Error("failed to get partner ratings", "error", err)
+	}
 
 	myRatingMap := make(map[string]string)
 	for _, rating := range myRatings {
@@ -120,21 +137,37 @@ func (h *Handler) Together(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) TogetherRefresh(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	idStr := r.PathValue("id")
-	partnershipID, _ := strconv.ParseInt(idStr, 10, 64)
-
-	partnership, err := h.queries.GetPartnershipByID(r.Context(), partnershipID)
+	partnershipID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	var partnerUserID int64
-	if partnership.UserID == userID {
-		partnerUserID = partnership.PartnerID.Int64
-	} else {
-		partnerUserID = partnership.UserID
+	partnership, err := h.queries.GetPartnershipByID(r.Context(), partnershipID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
 	}
 
-	myRatings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	// Authorization: only a party to the partnership can refresh
+	var partnerUserID int64
+	if partnership.UserID == userID {
+		if !partnership.PartnerID.Valid {
+			http.Error(w, "invalid partnership", http.StatusBadRequest)
+			return
+		}
+		partnerUserID = partnership.PartnerID.Int64
+	} else if partnership.PartnerID.Valid && partnership.PartnerID.Int64 == userID {
+		partnerUserID = partnership.UserID
+	} else {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	myRatings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings for together refresh", "error", err)
+	}
 	myRatingMap := make(map[string]string)
 	for _, rating := range myRatings {
 		myRatingMap[rating.ShowID] = rating.Rating

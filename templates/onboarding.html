@@ -5,10 +5,10 @@
     <span class="brand__mark">W<span class="brand__mark-sub">tw</span></span>
   </div>
   <div class="appbar__center">
-    <div class="progress">
-      <div class="progress__bar" style="width: {{if .Shows}}{{len .Shows}}{{else}}0{{end}}%"></div>
+    <div class="progress" role="progressbar" aria-valuenow="{{.RatedCount}}" aria-valuemin="0" aria-valuemax="{{.TotalShows}}">
+      <div class="progress__bar" style="width: {{progressPct .RatedCount .TotalShows}}%"></div>
     </div>
-    <span class="progress__label">{{.RatedCount}} of {{len .Shows}} rated &middot; 3 to unlock recs</span>
+    <span class="progress__label">{{.RatedCount}} of {{.TotalShows}} rated &middot; 3 to unlock recs</span>
   </div>
   <a href="/catalog" class="btn btn--ghost">Skip for now</a>
 </header>

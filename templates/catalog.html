@@ -23,8 +23,9 @@
     </div>
     <div class="tmdb-section__bar">
       <div class="search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input type="text" placeholder="Search TMDB&hellip;"
+               aria-label="Search TMDB"
                name="q" id="tmdbSearch"
                hx-get="/catalog/tmdb-search"
                hx-target="#tmdbResults"
@@ -36,8 +37,9 @@
 
   <div class="catalog__bar">
     <div class="search">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input type="text" placeholder="Search {{.ShowCount}} series&hellip;"
+             aria-label="Search catalog"
              name="q" value="{{.Search}}"
              hx-get="/catalog/filter"
              hx-target="#catalogGrid"
@@ -47,19 +49,24 @@
     <div class="filters">
       <button class="filter{{if or (eq .Filter "") (eq .Filter "all")}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=all"
-              hx-target="#catalogGrid">All</button>
+              hx-target="#catalogGrid"
+              hx-include="[name='q']">All</button>
       <button class="filter{{if eq .Filter "favourite"}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=favourite"
-              hx-target="#catalogGrid">Favourite</button>
+              hx-target="#catalogGrid"
+              hx-include="[name='q']">Favourite</button>
       <button class="filter{{if eq .Filter "liked"}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=liked"
-              hx-target="#catalogGrid">Liked</button>
+              hx-target="#catalogGrid"
+              hx-include="[name='q']">Liked</button>
       <button class="filter{{if eq .Filter "disliked"}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=disliked"
-              hx-target="#catalogGrid">Disliked</button>
+              hx-target="#catalogGrid"
+              hx-include="[name='q']">Disliked</button>
       <button class="filter{{if eq .Filter "unrated"}} filter--active{{end}}"
               hx-get="/catalog/filter?filter=unrated"
-              hx-target="#catalogGrid">Unrated</button>
+              hx-target="#catalogGrid"
+              hx-include="[name='q']">Unrated</button>
     </div>
   </div>
 

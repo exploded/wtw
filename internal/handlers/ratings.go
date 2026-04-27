@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"wtw/internal/db"
@@ -17,7 +18,11 @@ func setStatsTrigger(w http.ResponseWriter, oldRating, newRating string) {
 	trigger := map[string]interface{}{
 		"statsUpdate": map[string]string{"old": oldRating, "new": newRating},
 	}
-	b, _ := json.Marshal(trigger)
+	b, err := json.Marshal(trigger)
+	if err != nil {
+		slog.Error("failed to marshal stats trigger", "error", err)
+		return
+	}
 	w.Header().Set("HX-Trigger", string(b))
 }
 
@@ -31,9 +36,12 @@ func (h *Handler) SetRating(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Toggle: if current rating matches, remove it
-	currentRatings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	// Get current rating for this specific show
 	var oldRating string
+	currentRatings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
 	for _, cr := range currentRatings {
 		if cr.ShowID == showID {
 			oldRating = cr.Rating
@@ -46,7 +54,10 @@ func (h *Handler) SetRating(w http.ResponseWriter, r *http.Request) {
 			UserID: userID,
 			ShowID: showID,
 		})
-		show, _ := h.queries.GetShowByID(r.Context(), showID)
+		show, err := h.queries.GetShowByID(r.Context(), showID)
+		if err != nil {
+			slog.Error("failed to get show by id", "error", err)
+		}
 		setStatsTrigger(w, oldRating, "")
 		renderPartial(w, "poster-card", ShowWithRating{Show: show, Rating: ""})
 		return
@@ -58,7 +69,10 @@ func (h *Handler) SetRating(w http.ResponseWriter, r *http.Request) {
 		Rating: rating,
 	})
 
-	show, _ := h.queries.GetShowByID(r.Context(), showID)
+	show, err := h.queries.GetShowByID(r.Context(), showID)
+	if err != nil {
+		slog.Error("failed to get show by id", "error", err)
+	}
 	setStatsTrigger(w, oldRating, rating)
 	renderPartial(w, "poster-card", ShowWithRating{Show: show, Rating: rating})
 }
@@ -67,9 +81,11 @@ func (h *Handler) DeleteRating(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	showID := r.PathValue("show_id")
 
-	// Look up old rating before deleting
 	var oldRating string
-	currentRatings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	currentRatings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
 	for _, cr := range currentRatings {
 		if cr.ShowID == showID {
 			oldRating = cr.Rating
@@ -82,7 +98,10 @@ func (h *Handler) DeleteRating(w http.ResponseWriter, r *http.Request) {
 		ShowID: showID,
 	})
 
-	show, _ := h.queries.GetShowByID(r.Context(), showID)
+	show, err := h.queries.GetShowByID(r.Context(), showID)
+	if err != nil {
+		slog.Error("failed to get show by id", "error", err)
+	}
 	setStatsTrigger(w, oldRating, "")
 	renderPartial(w, "poster-card", ShowWithRating{Show: show, Rating: ""})
 }

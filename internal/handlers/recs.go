@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 
 	"wtw/internal/db"
@@ -22,7 +23,10 @@ type RecsData struct {
 func (h *Handler) Recs(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
-	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	ratings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings", "error", err)
+	}
 	ratingMap := make(map[string]string)
 	for _, rating := range ratings {
 		ratingMap[rating.ShowID] = rating.Rating
@@ -79,7 +83,10 @@ func (h *Handler) RecsNewVerdict(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) RecsRefresh(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
+	ratings, err := h.queries.GetUserRatings(r.Context(), userID)
+	if err != nil {
+		slog.Error("failed to get user ratings for refresh", "error", err)
+	}
 	ratingMap := make(map[string]string)
 	for _, rating := range ratings {
 		ratingMap[rating.ShowID] = rating.Rating

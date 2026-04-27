@@ -10,5 +10,5 @@ func NewNullString(s string) sql.NullString {
 }
 
 func NewNullInt64(i int64) sql.NullInt64 {
-	return sql.NullInt64{Int64: i, Valid: i != 0}
+	return sql.NullInt64{Int64: i, Valid: true}
 }
