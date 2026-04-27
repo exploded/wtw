@@ -14,7 +14,7 @@ type OnboardingData struct {
 
 func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	shows, _ := h.queries.GetShows(r.Context())
+	shows, _ := h.queries.GetTopShows(r.Context(), 20)
 	ratings, _ := h.queries.GetUserRatings(r.Context(), userID)
 
 	ratingMap := make(map[string]string)

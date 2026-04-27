@@ -656,6 +656,43 @@ func (q *Queries) GetShows(ctx context.Context) ([]Show, error) {
 	return items, nil
 }
 
+const getTopShows = `-- name: GetTopShows :many
+SELECT id, tmdb_id, title, year, poster_path, genre, synopsis, popularity, cached_at FROM shows ORDER BY popularity DESC LIMIT ?
+`
+
+func (q *Queries) GetTopShows(ctx context.Context, limit int64) ([]Show, error) {
+	rows, err := q.db.QueryContext(ctx, getTopShows, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Show
+	for rows.Next() {
+		var i Show
+		if err := rows.Scan(
+			&i.ID,
+			&i.TmdbID,
+			&i.Title,
+			&i.Year,
+			&i.PosterPath,
+			&i.Genre,
+			&i.Synopsis,
+			&i.Popularity,
+			&i.CachedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUnratedShows = `-- name: GetUnratedShows :many
 SELECT s.id, s.tmdb_id, s.title, s.year, s.poster_path, s.genre, s.synopsis, s.popularity, s.cached_at FROM shows s
 LEFT JOIN ratings r ON r.show_id = s.id AND r.user_id = ?

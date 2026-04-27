@@ -16,6 +16,24 @@
     </div>
   </div>
 
+  <div class="tmdb-section" id="tmdbSection">
+    <div class="tmdb-section__head">
+      <h3 class="h-display h-display--xs">Can't find a show?</h3>
+      <p class="lede lede--tight">Search TMDB to add any TV series to your catalog.</p>
+    </div>
+    <div class="tmdb-section__bar">
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="text" placeholder="Search TMDB&hellip;"
+               name="q" id="tmdbSearch"
+               hx-get="/catalog/tmdb-search"
+               hx-target="#tmdbResults"
+               hx-trigger="input changed delay:500ms">
+      </div>
+    </div>
+    <div id="tmdbResults"></div>
+  </div>
+
   <div class="catalog__bar">
     <div class="search">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -51,23 +69,6 @@
     {{end}}
   </div>
 
-  <div class="tmdb-section" id="tmdbSection">
-    <div class="tmdb-section__head">
-      <h3 class="h-display h-display--xs">Can't find a show?</h3>
-      <p class="lede lede--tight">Search TMDB to add any TV series to your catalog.</p>
-    </div>
-    <div class="tmdb-section__bar">
-      <div class="search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="text" placeholder="Search TMDB&hellip;"
-               name="q" id="tmdbSearch"
-               hx-get="/catalog/tmdb-search"
-               hx-target="#tmdbResults"
-               hx-trigger="input changed delay:500ms">
-      </div>
-    </div>
-    <div id="tmdbResults"></div>
-  </div>
 </main>
 {{end}}
 

@@ -179,8 +179,10 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Active partnerships (as owner)
+	seen := map[string]bool{}
 	owned, _ := h.queries.GetActivePartnershipsAsOwner(r.Context(), userID)
 	for _, p := range owned {
+		seen[p.PartnerEmail] = true
 		data.ActivePartners = append(data.ActivePartners, ActivePartner{
 			PartnershipID: p.ID,
 			Name:          p.PartnerName.String,
@@ -189,9 +191,12 @@ func (h *Handler) Profile(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Active partnerships (as partner)
+	// Active partnerships (as partner) - skip if already seen from owned
 	asPartner, _ := h.queries.GetActivePartnershipsAsPartner(r.Context(), db.NewNullInt64(userID))
 	for _, p := range asPartner {
+		if seen[p.PartnerEmail] {
+			continue
+		}
 		data.ActivePartners = append(data.ActivePartners, ActivePartner{
 			PartnershipID: p.ID,
 			Name:          p.PartnerName.String,

@@ -18,7 +18,7 @@
     <p class="eyebrow">Onboarding &middot; Step 1 of 1</p>
     <h2 class="h-display">Rate a few you know.</h2>
     <p class="lede lede--tight">
-      We've pulled fifty of the most-discussed series. Tap a poster to mark
+      Here are twenty of the most popular series. Tap a poster to mark
       it &mdash; or hit <em>Haven't seen</em> if it's not for you. Three is
       all we need to start.
     </p>
@@ -30,18 +30,18 @@
     </div>
   </div>
 
-  <div class="poster-grid" id="onboardGrid">
-    {{range .Shows}}
-    {{template "poster-card" .}}
-    {{end}}
-  </div>
-
   <div class="onboard__cta">
     <a href="/recs" class="btn btn--primary btn--lg">
       Get my recommendations
       <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></svg>
     </a>
     <a href="/catalog" class="btn btn--ghost">Browse the full catalog instead</a>
+  </div>
+
+  <div class="poster-grid" id="onboardGrid">
+    {{range .Shows}}
+    {{template "poster-card" .}}
+    {{end}}
   </div>
 </main>
 {{end}}

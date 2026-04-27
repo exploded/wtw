@@ -10,6 +10,9 @@ SELECT * FROM users WHERE id = ?;
 -- name: GetShows :many
 SELECT * FROM shows ORDER BY popularity DESC;
 
+-- name: GetTopShows :many
+SELECT * FROM shows ORDER BY popularity DESC LIMIT ?;
+
 -- name: GetShowByID :one
 SELECT * FROM shows WHERE id = ?;
 
