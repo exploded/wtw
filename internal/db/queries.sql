@@ -160,3 +160,11 @@ SELECT * FROM shows WHERE LOWER(title) = LOWER(?) LIMIT 1;
 
 -- name: CountShows :one
 SELECT COUNT(*) FROM shows;
+
+-- name: ListUsers :many
+SELECT u.id, u.email, u.name, u.avatar_url, u.created_at,
+       COUNT(r.show_id) AS rating_count
+FROM users u
+LEFT JOIN ratings r ON r.user_id = u.id
+GROUP BY u.id
+ORDER BY u.created_at DESC;

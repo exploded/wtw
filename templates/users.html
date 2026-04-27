@@ -1,0 +1,35 @@
+{{define "title"}}Users - What to Watch{{end}}
+{{define "users-content"}}
+{{template "appbar" .}}
+
+<main class="profile">
+
+  <section class="profile__head">
+    <h2 class="h-display h-display--sm">Users</h2>
+    <p class="lede lede--tight">{{len .Users}} registered</p>
+  </section>
+
+  <section class="profile__settings">
+    {{range .Users}}
+    <div class="settings-row">
+      <div class="partner-row">
+        <div class="partner-avatar">{{initials .Name}}</div>
+        <div>
+          <strong>{{.Name}}</strong>
+          <p>{{.Email}}</p>
+        </div>
+      </div>
+      <div class="partner-actions">
+        <span class="lede lede--tight">{{.RatingCount}} ratings</span>
+        <span class="lede lede--tight">Joined {{.CreatedAt.Format "Jan 2006"}}</span>
+      </div>
+    </div>
+    {{end}}
+  </section>
+
+</main>
+{{end}}
+
+{{define "content"}}
+{{template "users-content" .}}
+{{end}}

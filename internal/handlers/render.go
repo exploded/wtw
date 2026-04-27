@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"wtw/internal/db"
@@ -45,7 +46,7 @@ func loadTemplates() {
 
 	// Each page template = layout + partials + page-specific content
 	pageTemplates = make(map[string]*template.Template)
-	pages := []string{"landing.html", "onboarding.html", "recs.html", "catalog.html", "profile.html", "together.html"}
+	pages := []string{"landing.html", "onboarding.html", "recs.html", "catalog.html", "profile.html", "together.html", "users.html"}
 	for _, page := range pages {
 		// Clone partials so each page gets its own template set
 		t := template.Must(partialTmpl.Clone())
@@ -146,7 +147,10 @@ type PageData struct {
 	UserEmail    string
 	UserInitials string
 	Partners     []PartnerInfo
+	IsAdmin      bool
 }
+
+const adminEmail = "james67@gmail.com"
 
 func basePageData(r *http.Request, activeTab string) PageData {
 	name := middleware.GetUserName(r.Context())
@@ -157,6 +161,7 @@ func basePageData(r *http.Request, activeTab string) PageData {
 		UserName:     name,
 		UserEmail:    email,
 		UserInitials: ini,
+		IsAdmin:      strings.EqualFold(email, adminEmail),
 	}
 }
 

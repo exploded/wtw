@@ -894,6 +894,54 @@ func (q *Queries) InsertShow(ctx context.Context, arg InsertShowParams) error {
 	return err
 }
 
+const listUsers = `-- name: ListUsers :many
+SELECT u.id, u.email, u.name, u.avatar_url, u.created_at,
+       COUNT(r.show_id) AS rating_count
+FROM users u
+LEFT JOIN ratings r ON r.user_id = u.id
+GROUP BY u.id
+ORDER BY u.created_at DESC
+`
+
+type ListUsersRow struct {
+	ID          int64
+	Email       string
+	Name        string
+	AvatarUrl   sql.NullString
+	CreatedAt   time.Time
+	RatingCount int64
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersRow
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.CreatedAt,
+			&i.RatingCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setRating = `-- name: SetRating :exec
 INSERT INTO ratings (user_id, show_id, rating)
 VALUES (?, ?, ?)
