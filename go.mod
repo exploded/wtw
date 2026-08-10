@@ -1,8 +1,9 @@
 module wtw
 
-go 1.25.0
+go 1.26.0
 
 require (
+	github.com/exploded/monitor v0.0.0-20260331015627-909d7b304ae3
 	golang.org/x/oauth2 v0.36.0
 	modernc.org/sqlite v1.49.1
 )

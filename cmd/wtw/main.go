@@ -15,6 +15,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/exploded/monitor/pkg/logship"
+
 	"wtw/internal/auth"
 	"wtw/internal/db"
 	"wtw/internal/handlers"
@@ -119,7 +121,31 @@ func main() {
 	}
 	port = ":" + port
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	// Ship WARN+ to the monitor portal when configured, so an error here shows up
+	// on monitor's app-logs page and raises an alert, rather than sitting in
+	// journalctl until someone thinks to look.
+	monitorURL := os.Getenv("MONITOR_URL")
+	monitorKey := os.Getenv("MONITOR_API_KEY")
+	if monitorURL != "" && monitorKey != "" {
+		ship := logship.New(logship.Options{
+			Endpoint: monitorURL + "/api/logs",
+			APIKey:   monitorKey,
+			App:      "wtw",
+			Level:    slog.LevelWarn,
+		})
+		defer ship.Shutdown()
+
+		slog.SetDefault(slog.New(logship.Multi(
+			slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}),
+			ship,
+		)))
+		// At WARN so it actually ships: it is the one line that proves shipping
+		// is working after a deploy. WARN does not raise an alert (only ERROR
+		// does), so this is visible on the portal without being noise.
+		slog.Warn("wtw started, log shipping active", "endpoint", monitorURL+"/api/logs")
+	} else {
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	}
 	slog.Info("starting wtw", "prod", isProd, "port", port)
 
 	// Open SQLite database
