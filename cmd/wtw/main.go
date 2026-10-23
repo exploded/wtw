@@ -226,6 +226,17 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Public
+	// Health check for the uptime monitor. Pings the database, so a live process
+	// on a broken database reads as down.
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		if err := database.PingContext(r.Context()); err != nil {
+			http.Error(w, "db unhealthy", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write([]byte("ok"))
+	})
 	mux.HandleFunc("GET /{$}", h.Landing)
 	mux.HandleFunc("GET /auth/google", authHandler.Login)
 	mux.HandleFunc("GET /auth/google/callback", authHandler.Callback)
