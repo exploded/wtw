@@ -250,38 +250,9 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		favouriteTitles, likedTitles, dislikedTitles, ratedTitles,
 	)
 
-	body := map[string]interface{}{
-		"model":      "claude-sonnet-4-20250514",
-		"max_tokens": 200,
-		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
-		},
-	}
-	bodyJSON, _ := json.Marshal(body)
-
-	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(bodyJSON))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", e.anthropicKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := httpClient.Do(req)
+	text, err := e.callClaude(ctx, prompt)
 	if err != nil {
 		slog.Error("claude api error", "error", err)
-		return e.fallbackVerdict(ctx, userID)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		slog.Error("claude api non-200", "status", resp.StatusCode)
-		return e.fallbackVerdict(ctx, userID)
-	}
-
-	var apiResp struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
 		return e.fallbackVerdict(ctx, userID)
 	}
 
@@ -290,8 +261,8 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		Headline string `json:"headline"`
 		Verdict  string `json:"verdict"`
 	}
-	if err := json.Unmarshal([]byte(apiResp.Content[0].Text), &verdictResp); err != nil {
-		slog.Error("failed to parse verdict json", "error", err, "text", apiResp.Content[0].Text)
+	if err := json.Unmarshal([]byte(text), &verdictResp); err != nil {
+		slog.Error("failed to parse verdict json", "error", err, "text", text)
 		return e.fallbackVerdict(ctx, userID)
 	}
 
@@ -316,6 +287,79 @@ func (e *Engine) generateVerdict(ctx context.Context, userID int64) (*Verdict, e
 		ShowID:   show.ID,
 		Show:     show,
 	}, nil
+}
+
+// claudeModel is the model used for verdicts. Anthropic retires dated model
+// IDs; when one is, every call returns 404 and verdicts fall back to scoring.
+const claudeModel = "claude-sonnet-5-5"
+
+// verdictSchema is the JSON shape both verdict prompts ask for.
+var verdictSchema = map[string]interface{}{
+	"type": "object",
+	"properties": map[string]interface{}{
+		"pick":     map[string]string{"type": "string"},
+		"headline": map[string]string{"type": "string"},
+		"verdict":  map[string]string{"type": "string"},
+	},
+	"required":             []string{"pick", "headline", "verdict"},
+	"additionalProperties": false,
+}
+
+// callClaude sends a single-turn prompt and returns the reply's text block.
+func (e *Engine) callClaude(ctx context.Context, prompt string) (string, error) {
+	body := map[string]interface{}{
+		"model": claudeModel,
+		// Thinking is on by default and counts toward max_tokens, so leave
+		// headroom beyond the short JSON reply.
+		"max_tokens": 2048,
+		"output_config": map[string]interface{}{
+			"effort": "low",
+			// Structured output guarantees one parseable JSON object; without
+			// it the model sometimes second-guesses itself in plain text.
+			"format": map[string]interface{}{
+				"type":   "json_schema",
+				"schema": verdictSchema,
+			},
+		},
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+	}
+	bodyJSON, _ := json.Marshal(body)
+
+	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", e.anthropicKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return "", fmt.Errorf("non-200 status %d: %s", resp.StatusCode, msg)
+	}
+
+	var apiResp struct {
+		StopReason string `json:"stop_reason"`
+		Content    []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&apiResp); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	// The reply can start with a thinking block, so find the text by type.
+	for _, c := range apiResp.Content {
+		if c.Type == "text" {
+			return c.Text, nil
+		}
+	}
+	return "", fmt.Errorf("no text in response (stop_reason %q)", apiResp.StopReason)
 }
 
 // resolveShow looks up a show by title in the DB, falling back to TMDB search+insert.
@@ -578,38 +622,9 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 		ratedTitles,
 	)
 
-	body := map[string]interface{}{
-		"model":      "claude-sonnet-4-20250514",
-		"max_tokens": 200,
-		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
-		},
-	}
-	bodyJSON, _ := json.Marshal(body)
-
-	req, _ := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(bodyJSON))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", e.anthropicKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := httpClient.Do(req)
+	text, err := e.callClaude(ctx, prompt)
 	if err != nil {
 		slog.Error("claude api error (together)", "error", err)
-		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		slog.Error("claude api non-200 (together)", "status", resp.StatusCode)
-		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
-	}
-
-	var apiResp struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&apiResp); err != nil || len(apiResp.Content) == 0 {
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}
 
@@ -618,7 +633,7 @@ func (e *Engine) generateTogetherVerdict(ctx context.Context, partnershipID, use
 		Headline string `json:"headline"`
 		Verdict  string `json:"verdict"`
 	}
-	if err := json.Unmarshal([]byte(apiResp.Content[0].Text), &verdictResp); err != nil {
+	if err := json.Unmarshal([]byte(text), &verdictResp); err != nil {
 		slog.Error("failed to parse together verdict json", "error", err)
 		return e.fallbackTogetherVerdict(ctx, partnershipID, userA, userB)
 	}

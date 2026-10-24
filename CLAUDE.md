@@ -14,7 +14,7 @@ Use `go-htmx-skill` for template/HTMX/UI work and `sqlc-sqlite` for query work.
 ## Stack
 Go 1.26, stdlib `net/http`, html/template + HTMX, modernc.org/sqlite (pure Go) via
 sqlc, Google OAuth (`golang.org/x/oauth2`), TMDB API, Anthropic Messages API
-(model `claude-sonnet-4-20250514` in `internal/recommend/engine.go`).
+(model `claude-sonnet-5-5`, `claudeModel` in `internal/recommend/engine.go`).
 
 Logs ship to the monitor portal via `github.com/exploded/monitor/pkg/logship`,
 gated on `MONITOR_URL` + `MONITOR_API_KEY` (wired in `cmd/wtw/main.go`). WARN and
